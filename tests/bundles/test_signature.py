@@ -175,3 +175,49 @@ def test_a_der_key_of_the_wrong_algorithm_is_rejected() -> None:
     with pytest.raises(BundleError) as caught:
         load_public_key(der_public)
     assert caught.value.code == "SIGNING_KEY_INVALID"
+
+
+def test_text_keys_starting_with_zero_are_not_mistaken_for_der():
+    """A base64 or hex key whose first character is ``0`` (ASCII 0x30, the DER SEQUENCE tag)
+    is text, not DER. Found by WP1: ~1.7% of fresh keys failed to load."""
+    import base64 as _b64
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives import serialization as _ser
+
+    from image_processor.bundles import signature as sig
+
+    found = None
+    for _ in range(5000):
+        key = Ed25519PrivateKey.generate()
+        raw_pub = key.public_key().public_bytes(
+            _ser.Encoding.Raw, _ser.PublicFormat.Raw
+        )
+        if _b64.b64encode(raw_pub)[:1] == b"0":
+            found = (key, raw_pub)
+            break
+    assert found is not None, "no key with a base64 encoding starting with '0' in 5000 tries"
+    key, raw_pub = found
+    loaded = sig.load_public_key(_b64.b64encode(raw_pub))
+    assert loaded.public_bytes(_ser.Encoding.Raw, _ser.PublicFormat.Raw) == raw_pub
+    hex_text = raw_pub.hex().encode("ascii")
+    if hex_text[:1] == b"0":
+        assert (
+            sig.load_public_key(hex_text).public_bytes(
+                _ser.Encoding.Raw, _ser.PublicFormat.Raw
+            )
+            == raw_pub
+        )
+    # A raw 32-byte key starting with the SEQUENCE tag byte is still raw, not DER.
+    raw_starting_with_0x30 = bytes([0x30]) + raw_pub[1:]
+    assert (
+        sig.load_public_key(raw_starting_with_0x30).public_bytes(
+            _ser.Encoding.Raw, _ser.PublicFormat.Raw
+        )
+        == raw_starting_with_0x30
+    )
+    # Real DER still loads.
+    der = key.public_key().public_bytes(
+        _ser.Encoding.DER, _ser.PublicFormat.SubjectPublicKeyInfo
+    )
+    assert sig.load_public_key(der).public_bytes(_ser.Encoding.Raw, _ser.PublicFormat.Raw) == raw_pub

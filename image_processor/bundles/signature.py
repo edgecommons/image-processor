@@ -67,6 +67,20 @@ def _decode_raw(material: bytes, length: int) -> bytes:
     raise ValueError(f"not {length} raw bytes, base64, or hex")
 
 
+def _looks_der(data: bytes) -> bool:
+    """Return whether ``data`` is a DER encoding rather than base64 or hex text.
+
+    DER starts with the SEQUENCE tag ``0x30`` -- which is also ASCII ``'0'``, so a base64 or hex
+    key whose text happens to start with ``0`` must not be mistaken for DER. DER is binary and a
+    text encoding is printable, so the tag alone is never enough: the material must also contain
+    at least one non-printable byte. A raw 32-byte key is never DER either (an Ed25519
+    SubjectPublicKeyInfo is 44 bytes and a PKCS#8 private key 48).
+    """
+    if data[:1] != b"\x30" or len(data) == RAW_KEY_BYTES:
+        return False
+    return any((b < 0x20 and b not in b"\t\r\n") or b > 0x7E for b in data)
+
+
 def load_public_key(material: Union[Ed25519PublicKey, KeyMaterial]) -> Ed25519PublicKey:
     """Load a trusted Ed25519 public key.
 
@@ -86,7 +100,7 @@ def load_public_key(material: Union[Ed25519PublicKey, KeyMaterial]) -> Ed25519Pu
     try:
         if data.lstrip().startswith(_PEM_PREFIX):
             key = serialization.load_pem_public_key(data.lstrip())
-        elif data[:1] == b"\x30":
+        elif _looks_der(data):
             key = serialization.load_der_public_key(data)
         else:
             return Ed25519PublicKey.from_public_bytes(_decode_raw(data, RAW_KEY_BYTES))
@@ -121,7 +135,7 @@ def load_private_key(
     try:
         if data.lstrip().startswith(_PEM_PREFIX):
             key = serialization.load_pem_private_key(data.lstrip(), password=password)
-        elif data[:1] == b"\x30":
+        elif _looks_der(data):
             key = serialization.load_der_private_key(data, password=password)
         else:
             return Ed25519PrivateKey.from_private_bytes(_decode_raw(data, RAW_KEY_BYTES))
