@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.edgecommons.mbreissi.com/schemas/ImageProcessor/model-bundle-manifest.schema.json",
+  "title": "Model bundle manifest 1",
+  "description": "The `manifest.json` at the root of an ImageProcessor model bundle. A bundle is an immutable, content-addressed tarball whose digest is the SHA-256 of the tarball itself; `manifest.sig` is the Ed25519 detached signature over the exact bytes of this document. The manifest is the only thing a bundle may say about itself, and it is verified, never trusted: the component checks the tarball digest, then the signature when the profile requires one, then extracts under path, count, size, and ratio limits, then checks every per-file digest against `files`, then this schema, and only then decides whether the declared task family and providers are supported. No bundle-supplied code is ever executed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "modelId",
+    "version",
+    "files",
+    "minOnnxRuntime",
+    "providersPermitted",
+    "providerPolicy",
+    "inputs",
+    "outputs",
+    "dynamicBatch",
+    "family",
+    "preprocess",
+    "decisionRules",
+    "maxResultItems",
+    "estimatedDeviceMiB",
+    "transformVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "The manifest contract version. The component refuses a bundle whose version it does not implement rather than guessing at the shape."
+    },
+    "modelId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "The model's published id. A route's `modelRef.id` matches it.",
+      "examples": ["line-clearance-cam-01"]
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+      "description": "The model's published version. Identity on the wire is the tarball digest, so a version is a label for people, not the thing the component pins to.",
+      "examples": ["2026.08.20"]
+    },
+    "files": {
+      "title": "Per-file digests",
+      "description": "Every file the bundle carries, keyed by its path relative to the bundle root, with its SHA-256 as the value. Extraction checks each one; a file that is present but unlisted, or listed but absent, fails staging.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1000,
+      "propertyNames": { "$ref": "#/$defs/bundlePath" },
+      "additionalProperties": { "$ref": "#/$defs/hex256" }
+    },
+    "minOnnxRuntime": {
+      "type": "string",
+      "pattern": "^[0-9]+[.][0-9]+([.][0-9]+)?$",
+      "description": "The lowest ONNX Runtime version that can load this model. A device running an older runtime refuses the bundle instead of failing on the first inference.",
+      "examples": ["1.20.0"]
+    },
+    "providersPermitted": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/executionProvider" },
+      "description": "The execution providers this model may run on, in preference order. Staging refuses the bundle when none of them appears in the device's `runtime.providers`."
+    },
+    "providerPolicy": {
+      "enum": ["requireListed", "preferListed"],
+      "description": "How strictly `providersPermitted` binds. `requireListed`: the session must be assigned one of the listed providers, and a route whose device cannot supply one is blocked rather than run elsewhere. `preferListed`: the listed providers are tried in order and `CPUExecutionProvider` may serve as a fallback, which the device honors only when `runtime.allowCpuOnly` is set."
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/tensorSpec" },
+      "description": "The model's input tensors, as the graph declares them."
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/tensorSpec" },
+      "description": "The model's output tensors, as the graph declares them. The task family interprets them, so an output set no family can read is refused at staging."
+    },
+    "dynamicBatch": {
+      "type": "boolean",
+      "description": "Whether the input shapes carry a dynamic batch axis. The scheduler micro-batches only when this is `true`, so a static-batch model is never handed more than one image at a time."
+    },
+    "family": {
+      "enum": ["classification", "detection", "segmentation", "anomaly"],
+      "description": "The built-in task family that turns the raw outputs into the normalized result the decision rules evaluate."
+    },
+    "familyParams": {
+      "type": "object",
+      "description": "The parameters the declared family needs. Its shape depends on `family`; see the per-family conditions at the end of this schema."
+    },
+    "preprocess": { "$ref": "#/$defs/preprocess" },
+    "decisionRules": { "$ref": "#/$defs/decisionRules" },
+    "maxResultItems": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "How many items the normalized output may carry: classes, detections, or segment classes. It bounds both the published message and the evidence sidecar."
+    },
+    "estimatedDeviceMiB": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The publisher's estimate of the device memory one resident session needs. GPU admission starts from this number and refines it with measurements once the model has run."
+    },
+    "measuredDeviceMiB": {
+      "title": "Measured memory profiles",
+      "description": "Measured profiles per GPU class, which supersede `estimatedDeviceMiB` on a matching device.",
+      "type": "object",
+      "default": {},
+      "maxProperties": 32,
+      "propertyNames": { "type": "string", "maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["steadyMiB"],
+        "properties": {
+          "loadPeakMiB": { "type": "integer", "minimum": 0, "description": "The transient peak observed while the session loads." },
+          "steadyMiB": { "type": "integer", "minimum": 0, "description": "The steady-state footprint of the resident session." }
+        }
+      }
+    },
+    "warmup": {
+      "type": "array",
+      "maxItems": 16,
+      "default": [],
+      "items": { "$ref": "#/$defs/warmupSample" },
+      "description": "The golden samples a session runs before it serves any job. A model that cannot reproduce its own goldens on the target provider degrades its routes instead of answering."
+    },
+    "tolerances": { "$ref": "#/$defs/tolerances" },
+    "compatibilityKeys": {
+      "title": "Engine cache compatibility keys",
+      "description": "The dimensions a cached execution-provider engine is keyed by, as a flat map of names to values. A cached engine is reused only when every key matches the current device, driver, and runtime. Well-known keys are `precision`, `shapeProfile`, `gpuClass`, `cudaVersion`, `tensorrtVersion`, and `onnxruntimeVersion`.",
+      "type": "object",
+      "default": {},
+      "maxProperties": 32,
+      "propertyNames": { "type": "string", "maxLength": 64, "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "examples": [{ "precision": "fp16", "shapeProfile": "1x3x640x640" }]
+    },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "keyId": {
+      "type": ["string", "null"],
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "The signing key that produced `manifest.sig`, named as it appears in the device's `signing.trustedKeys`. It is `null` on an unsigned bundle, which a device with `signing.required` refuses."
+    },
+    "transformVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "The version of the decode and preprocessing contract this bundle expects. It is recorded on every job and every result, so a preprocessing change shows up as a different transform version rather than as a silent shift in the numbers.",
+      "examples": ["1"]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["family"], "properties": { "family": { "const": "classification" } } },
+      "then": { "properties": { "familyParams": { "$ref": "#/$defs/classificationParams" } } }
+    },
+    {
+      "if": { "required": ["family"], "properties": { "family": { "const": "detection" } } },
+      "then": { "properties": { "familyParams": { "$ref": "#/$defs/detectionParams" } } }
+    },
+    {
+      "if": { "required": ["family"], "properties": { "family": { "const": "segmentation" } } },
+      "then": { "properties": { "familyParams": { "$ref": "#/$defs/segmentationParams" } } }
+    },
+    {
+      "if": { "required": ["family"], "properties": { "family": { "const": "anomaly" } } },
+      "then": { "properties": { "familyParams": { "$ref": "#/$defs/anomalyParams" } } }
+    }
+  ],
+  "$defs": {
+    "tensorSpec": {
+      "title": "One tensor",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "dtype", "shape"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The tensor's name in the graph." },
+        "dtype": {
+          "enum": ["float32", "float16", "uint8", "int8", "int32", "int64", "bool"],
+          "description": "The tensor's element type."
+        },
+        "shape": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "description": "The tensor's shape. A positive integer is a fixed axis; a string names a dynamic axis, and the name `N` is reserved for the batch axis the scheduler batches along.",
+          "items": {
+            "anyOf": [
+              { "type": "integer", "minimum": 1 },
+              { "type": "string", "maxLength": 32, "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+            ]
+          },
+          "examples": [["N", 3, 640, 640]]
+        }
+      }
+    },
+    "preprocess": {
+      "title": "Decode and preprocessing",
+      "description": "How an executor cell turns decoded pixels into the model's input tensor. The component applies exactly this, so two bundles that share a transform version and a preprocess block produce comparable numbers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resize", "layout", "colorOrder", "dtype"],
+      "properties": {
+        "inputName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The input tensor the preprocessed image binds to. Omit it on a single-input model."
+        },
+        "resize": {
+          "title": "Resize",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "enum": ["stretch", "letterbox", "centerCrop", "none"],
+              "description": "How the source image reaches the model's input size. `stretch`: scale both axes independently. `letterbox`: scale to fit, then pad with `padValue`, which preserves aspect ratio and is what box coordinates are un-letterboxed from. `centerCrop`: scale the short side, then crop the center. `none`: feed the image as decoded, which needs a fully dynamic input shape."
+            },
+            "width": { "type": "integer", "minimum": 1, "description": "The model input width in pixels." },
+            "height": { "type": "integer", "minimum": 1, "description": "The model input height in pixels." },
+            "interpolation": {
+              "enum": ["nearest", "bilinear", "bicubic", "area"],
+              "default": "bilinear",
+              "description": "The resampling filter. It is part of the numeric contract, so changing it changes the transform version."
+            },
+            "padValue": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": { "type": "number" },
+              "default": [114, 114, 114],
+              "description": "The per-channel fill for `letterbox` padding, in the source pixel scale before normalization."
+            }
+          }
+        },
+        "normalize": {
+          "title": "Normalize",
+          "description": "The affine mapping applied per channel as `(pixel * scale - mean) / std`.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scale": {
+              "type": "number",
+              "default": 0.00392156862745098,
+              "description": "The factor applied to each raw pixel value before mean subtraction. The default maps `0..255` onto `0..1`."
+            },
+            "mean": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": { "type": "number" },
+              "default": [0, 0, 0],
+              "description": "The per-channel mean subtracted after scaling, in channel order.",
+              "examples": [[0.485, 0.456, 0.406]]
+            },
+            "std": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": { "type": "number", "exclusiveMinimum": 0 },
+              "default": [1, 1, 1],
+              "description": "The per-channel standard deviation divided out after mean subtraction, in channel order.",
+              "examples": [[0.229, 0.224, 0.225]]
+            }
+          }
+        },
+        "layout": {
+          "enum": ["NCHW", "NHWC"],
+          "description": "The axis order of the input tensor."
+        },
+        "colorOrder": {
+          "enum": ["RGB", "BGR"],
+          "description": "The channel order the model expects. Decoded images are RGB, so `BGR` reverses them."
+        },
+        "dtype": {
+          "enum": ["float32", "float16", "uint8"],
+          "description": "The element type of the input tensor after preprocessing."
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "default": 3,
+          "description": "How many channels the model takes. `1` converts to grayscale."
+        }
+      }
+    },
+    "decisionRules": {
+      "title": "Decision rules",
+      "description": "JSONPath expressions evaluated over the normalized task output. A rule that cannot evaluate yields `HOLD`, never `CLEAR`, which is why `outcome.whenUnevaluable` has only one value.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass"],
+      "properties": {
+        "pass": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The expression that decides `decision.pass`. It is a JSONPath over the normalized output, optionally compared against a literal or against `threshold`.",
+          "examples": ["$.classes[0].score >= threshold"]
+        },
+        "confidence": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 512,
+          "pattern": "^[$]",
+          "description": "The JSONPath whose value becomes `decision.confidence`. Omit it when the family produces no single confidence.",
+          "examples": ["$.classes[0].score"]
+        },
+        "threshold": {
+          "type": "number",
+          "description": "The number `pass` compares against, republished as `decision.threshold` so a consumer can see the bar that was applied."
+        },
+        "outcome": {
+          "title": "Outcome mapping",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "whenPass": {
+              "enum": ["CLEAR", "HOLD"],
+              "default": "CLEAR",
+              "description": "The outcome when `pass` evaluates true. An advisory model sets it to `HOLD` so a pass still requires a human."
+            },
+            "whenFail": {
+              "enum": ["HOLD", "FAIL"],
+              "default": "HOLD",
+              "description": "The outcome when `pass` evaluates false. `CLEAR` is not available here."
+            },
+            "whenUnevaluable": {
+              "const": "HOLD",
+              "default": "HOLD",
+              "description": "The outcome when the rules cannot be evaluated at all. It is always `HOLD`."
+            }
+          }
+        }
+      }
+    },
+    "warmupSample": {
+      "title": "One warmup sample",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "expected"],
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/bundlePath",
+          "description": "The raw input tensor, as little-endian binary matching `dtype` and `shape`.",
+          "examples": ["warmup/input-01.bin"]
+        },
+        "expected": {
+          "$ref": "#/$defs/bundlePath",
+          "description": "The expected answer, as JSON.",
+          "examples": ["warmup/expected-01.json"]
+        },
+        "inputName": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The input tensor the sample binds to. Omit it on a single-input model." },
+        "dtype": { "enum": ["float32", "float16", "uint8", "int8", "int32", "int64", "bool"], "description": "The element type of the sample's binary input." },
+        "shape": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "The fully resolved shape of the sample's binary input. A warmup sample has no dynamic axes."
+        },
+        "compare": {
+          "enum": ["tensors", "normalized"],
+          "default": "tensors",
+          "description": "What `expected` holds. `tensors`: raw output tensors, compared elementwise under `tolerances`. `normalized`: the family's normalized output, compared field by field, which is what a quantized model uses when its raw tensors are not reproducible."
+        }
+      }
+    },
+    "tolerances": {
+      "title": "Warmup tolerances",
+      "description": "How far a warmup run may drift from its golden before the bundle is refused. Every provider produces slightly different floating-point results, so a tolerance of zero would refuse every GPU.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "absolute": { "type": "number", "minimum": 0, "default": 0.0001, "description": "The largest permitted absolute difference per element." },
+        "relative": { "type": "number", "minimum": 0, "default": 0.001, "description": "The largest permitted relative difference per element." },
+        "boxIou": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.9, "description": "The smallest permitted intersection over union between a golden box and its match, used when `compare` is `normalized` on a detection model." }
+      }
+    },
+    "provenance": {
+      "title": "Provenance",
+      "description": "Who published the bundle and what it came from. It is carried into the evidence sidecar, so a result can be traced back to a training run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publisher"],
+      "properties": {
+        "publisher": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The publishing organization or team." },
+        "publishedAt": { "type": "string", "format": "date-time", "maxLength": 64, "description": "When the bundle was published, as an RFC 3339 timestamp." },
+        "sourceModel": { "type": "string", "maxLength": 512, "description": "The upstream model the bundle was exported from." },
+        "trainingRun": { "type": "string", "maxLength": 256, "description": "The training run or experiment identifier." },
+        "datasetVersion": { "type": "string", "maxLength": 256, "description": "The dataset the model was trained on." },
+        "license": { "type": "string", "maxLength": 128, "description": "The license the model is distributed under." },
+        "gitRevision": { "type": "string", "maxLength": 64, "description": "The revision of the pipeline that produced the bundle." },
+        "notes": { "type": "string", "maxLength": 2048, "description": "Anything else an auditor needs." }
+      }
+    },
+    "classificationParams": {
+      "title": "Classification parameters",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "topK": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 5, "description": "How many classes the normalized output keeps, after sorting by descending score." },
+        "activation": { "enum": ["softmax", "sigmoid", "none"], "default": "softmax", "description": "The activation applied to the raw logits. `none` means the graph already emits probabilities." },
+        "scoreThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0, "description": "The lowest score a class needs to appear in the output." },
+        "labelsFile": { "$ref": "#/$defs/bundlePath", "default": "labels.json", "description": "The bundle file that maps class indexes to labels." },
+        "outputName": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the logits. Omit it on a single-output model." }
+      }
+    },
+    "detectionParams": {
+      "title": "Detection parameters",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decoder": {
+          "enum": ["raw", "yolox", "ssd", "anchorBoxes"],
+          "default": "raw",
+          "description": "How raw outputs become boxes. `raw`: the graph already emits final boxes and scores. `yolox`: anchor-free grid decoding using `strides`. `ssd`: separate box, score, and class tensors named by `outputNames`. `anchorBoxes`: grid decoding against the `anchors` list."
+        },
+        "boxFormat": { "enum": ["xyxy", "xywh", "cxcywh"], "default": "xyxy", "description": "How the decoded box coordinates are laid out before normalization." },
+        "boxesNormalized": { "type": "boolean", "default": false, "description": "Whether decoded coordinates are already in `[0, 1]`. When `false` they are divided by the model input size and un-letterboxed." },
+        "strides": { "type": "array", "maxItems": 8, "items": { "type": "integer", "minimum": 1 }, "description": "The feature-map strides of a grid decoder.", "examples": [[8, 16, 32]] },
+        "anchors": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0 } },
+          "description": "The anchor box sizes as `[width, height]` pairs in model input pixels."
+        },
+        "numClasses": { "type": "integer", "minimum": 1, "description": "How many classes the head predicts." },
+        "scoreThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.25, "description": "The lowest score a detection needs to survive filtering." },
+        "iouThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.45, "description": "The intersection over union above which non-maximum suppression drops the weaker box." },
+        "classAgnosticNms": { "type": "boolean", "default": false, "description": "Whether suppression compares boxes across classes instead of within each class." },
+        "maxDetections": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100, "description": "How many detections survive suppression." },
+        "labelsFile": { "$ref": "#/$defs/bundlePath", "default": "labels.json", "description": "The bundle file that maps class indexes to labels." },
+        "outputNames": {
+          "title": "Output roles",
+          "description": "Which output tensor plays which role, for heads that emit more than one.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "predictions": { "type": "string", "minLength": 1, "maxLength": 256, "description": "A single fused prediction tensor." },
+            "boxes": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The box tensor." },
+            "scores": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The score tensor." },
+            "classes": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The class index tensor." }
+          }
+        }
+      }
+    },
+    "segmentationParams": {
+      "title": "Segmentation parameters",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "numClasses": { "type": "integer", "minimum": 1, "description": "How many classes the head predicts." },
+        "activation": { "enum": ["softmax", "sigmoid", "none"], "default": "softmax", "description": "The activation applied across the class axis. `sigmoid` treats each class independently." },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5, "description": "The per-pixel score at which a class claims a pixel, used with `sigmoid` activation." },
+        "ignoreIndex": { "type": ["integer", "null"], "default": null, "description": "A class index excluded from the summary, usually the background." },
+        "minRegionPixels": { "type": "integer", "minimum": 0, "default": 0, "description": "The smallest region reported, in source pixels. It suppresses single-pixel speckle." },
+        "labelsFile": { "$ref": "#/$defs/bundlePath", "default": "labels.json", "description": "The bundle file that maps class indexes to labels." },
+        "outputName": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the class map. Omit it on a single-output model." }
+      }
+    },
+    "anomalyParams": {
+      "title": "Anomaly parameters",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threshold": { "type": "number", "description": "The score at which the image counts as anomalous. It is republished on every result." },
+        "higherIsAnomalous": { "type": "boolean", "default": true, "description": "Whether a higher score means more anomalous. Set it to `false` for a similarity score." },
+        "scoreOutput": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the image-level score." },
+        "heatmapOutput": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the per-pixel anomaly map. The map is summarized and never published." },
+        "maxRegions": { "type": "integer", "minimum": 0, "maximum": 100, "default": 10, "description": "How many heatmap regions the summary reports." },
+        "regionThreshold": { "type": "number", "description": "The per-pixel score at which a heatmap pixel joins a region. It defaults to `threshold`." }
+      }
+    },
+    "executionProvider": {
+      "title": "ONNX Runtime execution provider",
+      "enum": ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
+      "description": "An execution provider name as ONNX Runtime reports it."
+    },
+    "bundlePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?![.][.])(?!.*/[.][.](/|$))[A-Za-z0-9._][A-Za-z0-9._/-]*$",
+      "description": "A path relative to the bundle root, with `/` separators. It is never absolute and never traverses upward; extraction rejects anything else before this schema is even reached.",
+      "examples": ["model.onnx", "warmup/input-01.bin"]
+    },
+    "hex256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 digest as 64 lowercase hex characters, without a prefix."
+    }
+  }
+}
