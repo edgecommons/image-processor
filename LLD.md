@@ -48,7 +48,7 @@ tests/
 ```
 
 Dependencies (`pyproject.toml`): runtime `numpy`, `pillow`, `onnxruntime` (CPU), `jsonpath-ng`,
-`cryptography` (Ed25519), `jsonschema`, `watchdog`; extras `gpu = ["onnxruntime-gpu"]`,
+`cryptography` (Ed25519), `jsonschema` (declared by WP1), `watchdog`; extras `gpu = ["onnxruntime-gpu"]`,
 `s3 = ["boto3"]`, `nvml = ["nvidia-ml-py"]`, `test = ["pytest", "pytest-cov", "onnx"]`. `onnx` is
 a test-only dependency (fixture generation); the runtime never imports it.
 
@@ -67,6 +67,11 @@ class CompletionAction(str, Enum): ARCHIVE, DELETE, RETAIN, QUARANTINE
 
 @dataclass(frozen=True)
 class ModelRef: id: str; version: str; digest: str            # digest = "sha256:<hex>"
+
+@dataclass(frozen=True)
+class SecretRef: name: str; field: str | None = None          # an unresolved {"$secret": ...} ref
+    # is_ref(value) / parse(value) / to_config(); parsing never opens the vault, because the core
+    # auto-resolves $secret only under `streaming` and this component resolves its own (DESIGN §9)
 
 @dataclass(frozen=True)
 class SourceIdentity:
@@ -139,24 +144,108 @@ a re-discovery of the same input under the same model yields the same id.
 
 `config.schema.json` (JSON Schema 2020-12, `additionalProperties: false` throughout) describes
 `component.global` and each `component.instances[]` entry exactly as DESIGN.md §11: `paths`,
-`runtime`, `gpu`, `scheduler`, `publish`, `signing`, `models[]`, `completionDefaults`; per instance
-`priority`, `source` (`kind: spool | trigger`, discriminated), `modelRef`, `outputs`, `completion`,
-`reprocessExistingOnModelChange`. `schemas/inference-result.schema.json` and
-`schemas/model-bundle-manifest.schema.json` are the wire/bundle contracts (DESIGN.md §12.1, §8).
+`runtime`, `gpu`, `scheduler`, `publish`, `signing`, `modelSources`, `models[]`,
+`completionDefaults`; per instance `id`, `enabled`, `priority`, `source` (`kind: spool | trigger`,
+discriminated), `modelRef`, `outputs`, `completion`, `reprocessExistingOnModelChange`.
+`schemas/inference-result.schema.json` and `schemas/model-bundle-manifest.schema.json` are the
+wire/bundle contracts (DESIGN.md §12.1, §8).
+
+`modelSources` (`allowedSchemes`, `allowedUriPrefixes`, `verifyTls`), `discovery` (`rescanSecs`,
+`debounceMs`) and the numeric policy fields `scheduler.{maxAttempts, retryBackoffSecs,
+maxRetryBackoffSecs, queueAgeWarningSecs}` and `publish.{maxAttempts, outboxCapacity,
+outboxReserveBudgetMiB}` are not in DESIGN.md §11's illustrative example; they carry the numbers
+§5.1, §7, §12.3 and §15 require, and they are the constructor arguments WP3 and WP5 take:
+`discovery` feeds `SpoolSource(rescan_interval_secs=, debounce_secs=)`, and
+`publish.outboxReserveBudgetMiB` feeds `Ledger(reserve_budget_bytes=)`. `outboxCapacity` bounds
+the number of pending rows, `outboxReserveBudgetMiB` bounds their bytes; they are different
+limits and both are kept.
+
+Config-level completion actions use §11's spelling (`archive | delete | retainInPlace |
+quarantine`) and map onto `CompletionAction`, where `retainInPlace` is `RETAIN`; `onCollision` is
+`fail | suffix`, matching `completion.actions.COLLISION_FAIL` / `COLLISION_SUFFIX`. A route with
+no `failedDir` quarantines in place.
+
+`ReadinessMode` and `CollisionPolicy` define `__str__ = str.__str__`, so `str(mode)` yields the
+configured spelling. `sources/readiness.py` normalizes that field with `str()`, and without this a
+parsed route would present `'ReadinessMode.STABILITY'` and be refused as an unknown mode.
+
+`schemas/model-bundle-manifest.schema.json` is the authority on what a bundle must declare, and
+its `preprocess`, `familyParams` and `decisionRules` accept exactly the vocabulary
+`engine/families/*.py` and `engine/decision.py` consume (documented in
+`docs/reference/data-types.md`). Every bundle `tests/fixtures/build.py` writes validates against
+it, which is the gate that keeps the two from drifting.
 
 ```python
 # config/models.py
-@dataclass(frozen=True) class Paths, RuntimeConfig, GpuConfig, SchedulerConfig, PublishConfig,
-    SigningConfig, ModelEntry(ModelRef + uri, credentials_ref, activation), CompletionPolicy,
-    SpoolSourceConfig, TriggerSourceConfig, OutputsConfig, RouteConfig, ComponentConfig
-def parse_component_config(global_cfg: dict, instances: list[dict]) -> ComponentConfig
-    # raises ConfigError(code, message) with SCREAMING_SNAKE codes; resolves defaults from completionDefaults
+class ConfigError(ValueError): code: str; message: str      # stable SCREAMING_SNAKE codes
+class ReadinessMode(str, Enum): CAMERA_SIDECAR, CAMERA_STATUS, MARKER, STABILITY
+class CollisionPolicy(str, Enum): FAIL = "fail"
+MAX_INLINE_BYTES = 65536; MUTATING_ACTIONS = {ARCHIVE, DELETE, QUARANTINE}
+COMPLETION_ACTION_NAMES: dict[str, CompletionAction]; EXECUTION_PROVIDERS: tuple[str, ...]
+
+@dataclass(frozen=True) class Paths: state_db, model_cache, staging                      # Path
+@dataclass(frozen=True) class RuntimeConfig: providers, required_provider, allow_cpu_only,
+    executor_cells_per_gpu, load_concurrency_per_gpu
+@dataclass(frozen=True) class GpuConfig: devices, resident_memory_budget_percent, reserve_mib
+@dataclass(frozen=True) class SchedulerConfig: max_batch_size, max_batch_latency_ms, hot_ttl_secs,
+    min_residency_secs, max_attempts, retry_backoff_secs, max_retry_backoff_secs,
+    queue_age_warning_secs
+@dataclass(frozen=True) class PublishConfig: confirmation_timeout_secs,
+    require_confirmation_before_cleanup, max_attempts, outbox_capacity,
+    outbox_reserve_budget_mib; .outbox_reserve_budget_bytes
+@dataclass(frozen=True) class DiscoveryConfig: rescan_secs, debounce_ms; .debounce_secs
+@dataclass(frozen=True) class TrustedKey: key_id; public_key: str | SecretRef
+@dataclass(frozen=True) class SigningConfig: required; trusted_keys; key(key_id) -> TrustedKey|None
+@dataclass(frozen=True) class ModelSourcesConfig: allowed_schemes, allowed_uri_prefixes, verify_tls
+@dataclass(frozen=True) class ModelActivation: require_warmup, retain_for_rollback
+@dataclass(frozen=True) class ModelEntry: id, version, digest, uri, credentials_ref: SecretRef|None,
+    activation: ModelActivation; .ref -> ModelRef
+@dataclass(frozen=True) class CompletionPolicy: on_success, on_invalid_input,
+    on_operational_failure, on_publish_failure (CompletionAction), on_collision (CollisionPolicy),
+    source_root: Path|None, archive_dir: Path|None, failed_dir: Path|None;
+    .actions, .mutates, .with_source_root(root)
+    # satisfies completion.actions.CompletionPolicy (a runtime_checkable Protocol). It annotates
+    # its paths as `str`; every use site wraps them in `Path(...)`, so `Path` values satisfy it.
+    # source_root is None on ComponentConfig.completion_defaults, which is a template, not a policy.
+@dataclass(frozen=True) class ReadinessConfig: mode: ReadinessMode; quiet_secs; marker_suffix
+@dataclass(frozen=True) class CameraBinding: component, instance, subscribe_announcements,
+    reconcile_capture_status_secs
+@dataclass(frozen=True) class SpoolSourceConfig: root: Path; include; exclude;
+    readiness: ReadinessConfig; camera: CameraBinding|None; kind = "spool"
+@dataclass(frozen=True) class TriggerSourceConfig: subscribe; file_root: Path;
+    inline_staging: Path; max_inline_bytes; kind = "trigger"
+@dataclass(frozen=True) class DecisionSignal: id; value                      # value is a JSONPath
+@dataclass(frozen=True) class OutputsConfig: write_result_sidecar; decision_signals
+@dataclass(frozen=True) class RouteConfig: id, enabled, priority, source, model_ref: ModelRef,
+    outputs, completion, reprocess_existing_on_model_change;
+    .is_spool, .is_trigger, .input_root, .mutating_roots, .output_dirs
+    .completion_for(kind: SourceKind) -> CompletionPolicy
+    # `completion` carries the route's own root: the spool root, or a trigger route's
+    # inlineStaging. A REFERENCE input on a trigger route resolves under fileRoot instead, so WP6
+    # hands the completer `route.completion_for(job.source.kind)` rather than `route.completion`.
+@dataclass(frozen=True) class ComponentConfig: paths, runtime, gpu, scheduler, discovery, publish,
+    signing, model_sources, models, completion_defaults, routes;
+    .route(id), .model_entry(ref), .enabled_routes
+
+def parse_component_config(global_cfg: dict|None, instances: list[dict]|None) -> ComponentConfig
+    # raises ConfigError(code, message) with SCREAMING_SNAKE codes; applies the schema's defaults,
+    # folds completionDefaults into each route, turns every $secret into an unresolved SecretRef
 # config/validate.py
+VALIDATOR_NAME = "image-processor"
+CONFIG_SCHEMA / INFERENCE_RESULT_SCHEMA / MODEL_BUNDLE_MANIFEST_SCHEMA   # paths from the repo root
+def schema_path(relative: str) -> Path ; def load_schema(relative: str) -> dict   # cached, fail-closed
+def register(builder) -> builder     # builder.configuration_validator(VALIDATOR_NAME, validate_candidate)
 def validate_candidate(candidate: dict, current: dict | None, phase) -> ConfigurationValidationResult
-    # registered via EdgeCommonsBuilder.configuration_validator("image-processor", validate_candidate)
-    # checks: schema, duplicate ids, unresolved modelRef, overlapping mutating roots, path containment,
-    # completion dirs exist or creatable, provider policy vs runtime.providers, trigger roots
+    # checks: schema (SCHEMA_INVALID), parse codes, UNRESOLVED_MODEL_REF,
+    # OVERLAPPING_MUTATING_ROOTS, OUTPUT_INSIDE_SOURCE_ROOT, MISSING_ARCHIVE_DIR,
+    # COMPLETION_DIR_NOT_CREATABLE, INLINE_STAGING_NOT_CONTAINED,
+    # STABILITY_NOT_PERMITTED_ON_CAMERA_ROUTE (the code sources/readiness.py raises),
+    # CAMERA_BINDING_REQUIRED, PROVIDER_POLICY_UNSATISFIED, MODEL_URI_{SCHEME_,}NOT_ALLOWED,
+    # NO_TRUSTED_KEYS, and on RELOAD IMMUTABLE_PATH_CHANGED for stateDb/modelCache/staging
 ```
+
+Decision-signal expressions are checked structurally here (non-empty, rooted at `$`); compiling
+them is `engine/decision.py`'s job (WP4a), which owns the `jsonpath-ng` dependency.
 
 ## 4. `bundles/` (WP2)
 

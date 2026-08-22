@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "image-processor"
 version = "0.1.0"
 description = "Image inference processor: loads image-model bundles (ONNX Runtime, NVIDIA GPU), runs inference on finalized image files or subscription-triggered images, and publishes versioned inference results with evidence."
-requires-python = ">=3.9"
+# WP1: DESIGN.md section 1 pins the runtime to Python 3.12 and up; the scaffold default said 3.9.
+requires-python = ">=3.12"
 dependencies = [
     # The edgecommons Python library, in the same form as requirements.txt (the CLI substitutes
     # the `--dep-source` you chose: a pinned git requirement for `registry`/`pinned-rev`, a
@@ -17,8 +18,11 @@ dependencies = [
     # TODO: add your component's own runtime dependencies here.
     # WP5 (sources): the spool source turns OS filesystem notifications into scan nudges.
     "watchdog>=3.0.0",
-    # WP2 (bundles): Ed25519 bundle signatures and model-bundle-manifest schema validation.
+    # WP2 (bundles): Ed25519 bundle signatures.
     "cryptography>=42",
+    # WP1 (contracts): the component validates its own config.schema.json and the shipped
+    # wire/bundle schemas at runtime, so jsonschema is a first-class runtime dependency here
+    # rather than something inherited from the core library. WP2's manifest loader uses it too.
     "jsonschema>=4.21",
     # WP4a -- engine: decode, task families, decision rules.
     "numpy>=1.26",

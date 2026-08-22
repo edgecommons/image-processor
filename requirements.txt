@@ -8,6 +8,7 @@ watchdog>=3.0.0
 # sibling checkout for `local`. Bump it later with `edgecommons component upgrade --to <ver>`.
 edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python
 
+# WP1 (contracts): JSON Schema 2020-12 validation of config.schema.json and schemas/*.json.
 # WP2 (bundles): Ed25519 bundle signatures and model-bundle-manifest schema validation.
 # `boto3` stays out of this list: `s3://` model sources come from the `s3` extra
 # (`pip install .[s3]`), and without it an `s3://` URI fails with BundleError("S3_UNAVAILABLE").

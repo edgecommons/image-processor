@@ -44,7 +44,7 @@ def test_a_good_bundle_loads_every_design_field(extracted: Path, schema_path: Pa
     assert manifest.version == "2026.08.20"
     assert manifest.min_onnxruntime == "1.18.0"
     assert manifest.providers_permitted == ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    assert manifest.provider_policy == "required"
+    assert manifest.provider_policy == "requireListed"
     assert manifest.inputs[0].name == "images"
     assert manifest.inputs[0].shape == ("N", 3, 224, 224)
     assert manifest.outputs[0].dtype == "float32"
@@ -56,7 +56,7 @@ def test_a_good_bundle_loads_every_design_field(extracted: Path, schema_path: Pa
     assert manifest.max_result_items == 10
     assert manifest.estimated_device_mib == 512
     assert manifest.warmup[0]["input"] == "warmup/input-01.bin"
-    assert manifest.tolerances["score"] == 0.001
+    assert manifest.tolerances["absolute"] == 0.001
     assert manifest.compatibility_keys["gpuClass"] == "sm_86"
     assert manifest.provenance["publisher"] == "pharma-mlops"
     assert manifest.key_id == "pharma-model-publisher-1"
@@ -143,7 +143,9 @@ def test_a_files_key_cannot_escape_the_bundle(extracted: Path, schema_path: Path
     with pytest.raises(BundleError) as caught:
         load_manifest(extracted, schema_path)
     assert caught.value.code == "MANIFEST_INVALID"
-    assert "traverses" in caught.value.message
+    # The shipped schema's `bundlePath` pattern refuses the key before the loader's own
+    # traversal guard sees it, so the diagnostic names the key rather than the guard.
+    assert "../secrets.env" in caught.value.message
 
 
 def test_a_missing_schema_file_is_reported(extracted: Path, tmp_path: Path) -> None:

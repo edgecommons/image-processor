@@ -298,6 +298,16 @@ the task family and its parameters, decode/preprocessing configuration, the deci
 typed result schema and maximum result cardinality, estimated device memory and optional measured
 profiles per GPU class, warmup samples and tolerances, compatibility keys for engine caches,
 provenance and publisher identity, and the signing `keyId`.
+`schemas/model-bundle-manifest.schema.json` is the contract.
+
+`providerPolicy` is `requireListed` or `preferListed`. `requireListed` means the session must be
+assigned one of `providersPermitted`, and a route whose device can supply none is blocked rather
+than run elsewhere. `preferListed` tries them in order and permits a `CPUExecutionProvider`
+fallback, which a device honours only under `runtime.allowCpuOnly`.
+
+`manifest.files` is exhaustive. Extraction refuses a member the manifest does not declare
+(`FILE_UNDECLARED`), because the signature covers `manifest.json` alone: content the manifest
+never named is content no signature covers.
 
 ### 8.1 Task families and decision rules (D-IP-12)
 
@@ -401,7 +411,9 @@ Illustrative; `config.schema.json` is the contract.
       },
       "gpu": { "devices": ["0"], "residentMemoryBudgetPercent": 80, "reserveMiB": 2048 },
       "scheduler": { "maxBatchLatencyMs": 20, "hotTtlSecs": 120, "minResidencySecs": 15 },
-      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true },
+      "discovery": { "rescanSecs": 60, "debounceMs": 500 },
+      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true, "outboxReserveBudgetMiB": 256 },
+      "modelSources": { "allowedSchemes": ["s3"], "allowedUriPrefixes": ["s3://approved-models/"], "verifyTls": true },
       "signing": {
         "required": true,
         "trustedKeys": [ { "keyId": "pharma-model-publisher-1", "publicKey": { "$secret": "model-signing/publisher-1" } } ]
@@ -460,6 +472,18 @@ Illustrative; `config.schema.json` is the contract.
 }
 ```
 
+`modelSources` bounds what a configuration change can make the component download: the approved
+URI schemes, the allow-listed prefixes, and TLS verification (§15). `discovery` sets the spool walk
+cadence: `rescanSecs` is the authoritative walk that recovers a dropped notification, `debounceMs`
+is how long notifications must stop before a nudged walk runs. `publish.outboxReserveBudgetMiB` is
+the admission reservation budget in bytes — the capacity §7 requires a job to hold before it is
+admitted — while `publish.outboxCapacity` bounds the number of pending rows.
+
+Completion actions are spelled `archive | delete | retainInPlace | quarantine`, and
+`onCollision` is `fail` or `suffix`: `fail` records `CLEANUP_FAILED` and leaves both objects
+intact, `suffix` installs the input beside the occupant under a deterministic digest-derived name.
+Neither overwrites the object already there. A route with no `failedDir` quarantines in place.
+
 Validation is fail-closed: unknown fields, duplicate ids, unresolved model references, overlapping
 mutating roots, missing completion directories, provider policy, path containment, trigger roots,
 and output-schema mismatches reject the candidate (core candidate validator, reject-and-keep).
@@ -487,6 +511,9 @@ is the contract):
   "artifacts": { "evidenceId": "01K...", "localRelativePath": "cam-01/....inference.json", "sha256": "..." }
 }
 ```
+
+Every region — a detection `box`, a segment `bbox`, an anomaly summary `bbox` — is `[x, y, w, h]`
+normalized to the source image, so a consumer draws it without knowing the model's input size.
 
 All collections have configured limits. A result over the message budget is written in full to the
 result sidecar and published as a bounded summary with `evidenceId`, relative path, size, and

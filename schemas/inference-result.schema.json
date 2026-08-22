@@ -1,0 +1,442 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.edgecommons.mbreissi.com/schemas/ImageProcessor/inference-result.schema.json",
+  "title": "ImageInferenceResult 1.0",
+  "description": "The body of the message ImageProcessor publishes on `ecv1/{device}/image-processor/{routeId}/app/inference/result`, with header name `ImageInferenceResult` and version `1.0`. This message is the authoritative, cleanup-gating output for one image: it is prepared once, stored byte for byte in the ledger, and published with positive transport confirmation before the input is archived, deleted, or quarantined. A consumer that enforces a safety gate reads this message and nothing else, and treats a missing, failed, stale, or unverified result as not clear. Every collection is bounded; when a result exceeds the message budget the full result is written to the evidence sidecar and this message carries the bounded summary with `outputs.truncated` set and `artifacts` naming the sidecar.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "inferenceId", "status", "source", "model", "timingsMs"],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0",
+      "description": "The body contract version. A consumer that does not recognize the version does not interpret the body."
+    },
+    "inferenceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "The stable identity of this inference, derived once from the route, the capture or source digest, and the model digest. A retry reuses it, and a crash between transport confirmation and the local acknowledgement may publish a duplicate, so consumers deduplicate on this field. Reprocessing under a different model digest produces a different id."
+    },
+    "routeId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "The route that produced the result. It is also the `{instance}` segment of the topic."
+    },
+    "status": {
+      "enum": ["SUCCEEDED", "FAILED"],
+      "description": "Whether the model produced a result. `SUCCEEDED` carries `decision` and `outputs`; `FAILED` carries `error`, and its decision is never `CLEAR`."
+    },
+    "source": { "$ref": "#/$defs/source" },
+    "model": { "$ref": "#/$defs/model" },
+    "decision": { "$ref": "#/$defs/decision" },
+    "outputs": { "$ref": "#/$defs/outputs" },
+    "timingsMs": { "$ref": "#/$defs/timings" },
+    "artifacts": { "$ref": "#/$defs/artifacts" },
+    "error": { "$ref": "#/$defs/error" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "const": "SUCCEEDED" } }
+      },
+      "then": { "required": ["decision", "outputs"] }
+    },
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "const": "FAILED" } }
+      },
+      "then": {
+        "required": ["error"],
+        "properties": {
+          "decision": {
+            "properties": { "outcome": { "enum": ["HOLD", "FAIL"] } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["outputs"],
+        "properties": {
+          "outputs": {
+            "required": ["truncated"],
+            "properties": { "truncated": { "const": true } }
+          }
+        }
+      },
+      "then": {
+        "required": ["artifacts"],
+        "properties": {
+          "artifacts": {
+            "required": ["evidenceId", "localRelativePath", "sha256", "bytes"]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "source": {
+      "title": "Input identity",
+      "description": "What was inferred on, and how it arrived.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "relativePath", "bytes", "sha256"],
+      "properties": {
+        "kind": {
+          "enum": ["spool", "inline", "reference"],
+          "description": "How the image reached the component. `spool`: discovered as a finalized file in a watched root. `inline`: carried as binary bytes in a trigger message and written to processor-owned staging. `reference`: named by a trigger message and resolved under the route's `fileRoot`."
+        },
+        "captureId": {
+          "type": ["string", "null"],
+          "maxLength": 128,
+          "description": "The camera's capture identity, when the input came from a camera spool. It is the preferred half of the job's logical key."
+        },
+        "cameraId": {
+          "type": ["string", "null"],
+          "maxLength": 128,
+          "description": "The camera instance that produced the image."
+        },
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "The input's path relative to the route's root, with `/` separators. Absolute paths are never published, and a path supplied by a producer is never trusted without containment and digest verification."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The verified size of the input in bytes."
+        },
+        "sha256": {
+          "$ref": "#/$defs/hex256",
+          "description": "The verified SHA-256 of the input bytes. It is what the executor cell checked before it decoded anything."
+        },
+        "correlationId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "The correlation id of the trigger message, when the job came from a request."
+        },
+        "capturedAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "When the image was captured, in milliseconds since the Unix epoch, as reported by the camera."
+        }
+      }
+    },
+    "model": {
+      "title": "Model generation and execution",
+      "description": "The exact model generation that produced the result, and the provider it actually ran on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest", "runtime", "providers"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The model's published id, as the bundle manifest declares it."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The model's published version, as the bundle manifest declares it."
+        },
+        "digest": {
+          "$ref": "#/$defs/digest",
+          "description": "The bundle tarball digest the job was pinned to. Two results with the same digest came from bit-identical weights."
+        },
+        "runtime": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The inference runtime.",
+          "examples": ["onnxruntime"]
+        },
+        "runtimeVersion": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "The runtime's version, as reported by the executor cell."
+        },
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "description": "The execution providers the session was actually assigned, in the order the runtime reports them. This is the observed assignment, not the configured preference, so a result never implies a GPU it did not use."
+        },
+        "gpu": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "description": "The device the session ran on, or `null` on a CPU session.",
+          "properties": {
+            "deviceId": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The CUDA ordinal or device UUID."
+            },
+            "class": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The device class, used to key measured memory profiles and engine caches.",
+              "examples": ["sm_120"]
+            }
+          }
+        },
+        "transformVersion": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "The decode and preprocessing contract version the cell applied. Two results are comparable only when their transform versions match."
+        }
+      }
+    },
+    "decision": {
+      "title": "Decision",
+      "description": "The decision rules' verdict over the normalized output. A rule that cannot evaluate yields `HOLD`, never `CLEAR`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "pass"],
+      "properties": {
+        "outcome": {
+          "enum": ["CLEAR", "HOLD", "FAIL"],
+          "description": "The gate verdict. `CLEAR`: the rules evaluated and passed. `HOLD`: the rules did not pass, or could not be evaluated. `FAIL`: the inference itself failed."
+        },
+        "pass": {
+          "type": "boolean",
+          "description": "Whether the pass rule evaluated true. It is `false` whenever `outcome` is not `CLEAR`."
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "description": "In whatever units the confidence path reports. The confidence the rules extracted from the normalized output, or `null` when the rule produced no number."
+        },
+        "threshold": {
+          "type": ["number", "null"],
+          "description": "The threshold the confidence was compared against, as configured in the bundle manifest."
+        },
+        "rule": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "The rule expression that decided the outcome, so an operator can see why a result held."
+        }
+      }
+    },
+    "outputs": {
+      "title": "Normalized model output",
+      "description": "The task family's output in the shape the decision rules evaluate. Only the family's own collection is populated. Masks and tensors are never published; segmentation reports pixel counts and regions instead.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "enum": ["classification", "detection", "segmentation", "anomaly"],
+          "description": "The task family the bundle declares, which is what determines the collection below."
+        },
+        "classes": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/classScore" },
+          "description": "Classification scores, ordered by descending score and bounded by the manifest's `maxResultItems`."
+        },
+        "detections": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/detection" },
+          "description": "Detections after non-maximum suppression, ordered by descending score and bounded by the manifest's `maxResultItems`."
+        },
+        "segments": {
+          "type": "object",
+          "maxProperties": 1000,
+          "additionalProperties": { "$ref": "#/$defs/segment" },
+          "description": "Per-class segmentation summary, keyed by class label."
+        },
+        "anomaly": { "$ref": "#/$defs/anomaly" },
+        "truncated": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the collections above were bounded to fit the message budget. When it is `true`, `artifacts` names the sidecar that holds the full result, so a decision-bearing result is never shortened silently."
+        }
+      }
+    },
+    "timings": {
+      "title": "Stage timings",
+      "description": "Milliseconds spent in each stage of one attempt. `total` covers admission to result commit.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total"],
+      "properties": {
+        "queue": { "type": "number", "minimum": 0, "description": "Time from admission to dispatch." },
+        "modelLoad": { "type": "number", "minimum": 0, "description": "Time spent loading the model generation, which is `0` on a resident session." },
+        "preprocess": { "type": "number", "minimum": 0, "description": "Decode, resize, and normalization in the executor cell." },
+        "inference": { "type": "number", "minimum": 0, "description": "The session run itself." },
+        "postprocess": { "type": "number", "minimum": 0, "description": "Task-family postprocessing and decision evaluation." },
+        "total": { "type": "number", "minimum": 0, "description": "End-to-end time for the attempt." }
+      }
+    },
+    "artifacts": {
+      "title": "Evidence artifacts",
+      "description": "The evidence sidecar this result belongs to. It is present whenever the route writes a sidecar, and required whenever the published outputs are truncated.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "The identity of the evidence record, which is what a downstream evidence chain joins on."
+        },
+        "localRelativePath": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "The sidecar's path relative to the route's evidence root, with `/` separators."
+        },
+        "sha256": { "$ref": "#/$defs/hex256", "description": "The SHA-256 of the installed sidecar, which is immutable once written." },
+        "bytes": { "type": "integer", "minimum": 0, "description": "The size of the sidecar in bytes." }
+      }
+    },
+    "error": {
+      "title": "Failure detail",
+      "description": "Why the inference failed. It is present exactly when `status` is `FAILED`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
+          "description": "A stable, operator-safe failure code.",
+          "examples": ["DECODE_FAILED", "PROVIDER_UNAVAILABLE", "RETRY_BUDGET_EXHAUSTED"]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1024,
+          "description": "A bounded human-readable diagnostic. It never carries image bytes, tensors, or credentials."
+        },
+        "class": {
+          "enum": ["transient", "permanent", "contaminating"],
+          "description": "How the failure is handled. `transient`: retried under the job's retry budget. `permanent`: the input can never succeed, so the job takes the invalid-input completion action. `contaminating`: the executor cell's CUDA context is unusable, so the cell drains and restarts and the job returns to retry."
+        }
+      }
+    },
+    "classScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "index", "score"],
+      "properties": {
+        "label": { "type": "string", "maxLength": 256, "description": "The class label from the bundle's label file." },
+        "index": { "type": "integer", "minimum": 0, "description": "The class index in the model's output vector." },
+        "score": { "type": "number", "description": "Softmax and sigmoid put it in the unit range; none reports the raw value. The class score after the family's activation." }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "index", "score", "box"],
+      "properties": {
+        "label": { "type": "string", "maxLength": 256, "description": "The class label from the bundle's label file." },
+        "index": { "type": "integer", "minimum": 0, "description": "The class index in the model's output vector." },
+        "score": { "type": "number", "description": "Objectness times class score for a grid head, the head confidence for a decoded head, after suppression." },
+        "box": { "$ref": "#/$defs/box" }
+      }
+    },
+    "box": {
+      "title": "Normalized box",
+      "description": "A region as `[x, y, w, h]` in the source image, normalized to `[0, 1]` with the origin at the top left, so a consumer needs no knowledge of the model input resolution to draw it. A box decoded on a letterboxed canvas is reported against the picture the camera took, and clipped to it.",
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number" }
+    },
+    "segment": {
+      "title": "One class of a segmentation map",
+      "description": "In `argmax` mode every label gets an entry, including the ones with no pixels, so a rule such as \"no defect pixels\" evaluates on a clean image instead of failing to resolve its path.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pixels", "fraction"],
+      "properties": {
+        "pixels": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many pixels of the class map the class claims."
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "That count divided by the size of the class map, so a rule can be written against the image rather than against a resolution."
+        },
+        "bbox": {
+          "type": ["array", "null"],
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "type": "number" },
+          "description": "The region those pixels occupy as `[x, y, w, h]`, normalized to the source image, or `null` when the class claims none."
+        }
+      }
+    },
+    "anomaly": {
+      "title": "Anomaly score",
+      "description": "One image-level score against one threshold, plus a bounded summary of the heatmap when the head produced one. The map itself stays in the executor cell.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "threshold", "anomalous", "direction"],
+      "properties": {
+        "score": {
+          "type": "number",
+          "description": "The activated, normalized score. It lies in `[0, 1]` when the manifest declares a `normalization`."
+        },
+        "threshold": {
+          "type": "number",
+          "description": "The manifest threshold, in the same units as `score`."
+        },
+        "anomalous": {
+          "type": "boolean",
+          "description": "Whether the score crossed the threshold in the direction `direction` names."
+        },
+        "direction": {
+          "enum": ["higherIsAnomalous", "lowerIsAnomalous"],
+          "description": "Which end of the range is anomalous. A similarity head reports `lowerIsAnomalous`."
+        },
+        "summary": {
+          "title": "Heatmap summary",
+          "description": "Present for a map head only.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max", "mean", "aboveThresholdPixels", "fraction"],
+          "properties": {
+            "min": { "type": "number", "description": "The lowest per-pixel score." },
+            "max": { "type": "number", "description": "The highest per-pixel score." },
+            "mean": { "type": "number", "description": "The mean per-pixel score." },
+            "aboveThresholdPixels": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many pixels crossed the threshold."
+            },
+            "fraction": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "That count divided by the size of the map."
+            },
+            "bbox": {
+              "type": ["array", "null"],
+              "minItems": 4,
+              "maxItems": 4,
+              "items": { "type": "number" },
+              "description": "The region the crossing pixels occupy as `[x, y, w, h]`, normalized to the source image, or `null` when none crossed."
+            }
+          }
+        }
+      }
+    },
+    "hex256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 digest as 64 lowercase hex characters, without a prefix."
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "A SHA-256 digest in `sha256:<64 lowercase hex>` form."
+    }
+  }
+}

@@ -2,26 +2,302 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://docs.edgecommons.mbreissi.com/schemas/ImageProcessor/config.schema.json",
   "title": "ImageProcessor component configuration",
-  "description": "The configuration ImageProcessor itself understands: the object at `component.global`, with each entry of `component.instances[]` validated against `#/$defs/route`. A processor models ONE ROUTE PER INSTANCE — a set of topic filters, a pipeline of stages, and a target. The library envelope (logging, messaging, metricEmission, heartbeat, streaming, credentials, parameters, health, hierarchy, identity, topic, tags) is owned by the canonical schema and is deliberately not redeclared here. Keep `additionalProperties: false` so a typo'd key is caught at deploy time rather than silently ignored — `image_processor/pipeline.py` rejects an unknown route key at parse time for the same reason.",
+  "description": "The configuration ImageProcessor itself understands: the object at `component.global`, with each entry of `component.instances[]` validated against `#/$defs/route`. One instance is one ROUTE - it binds one input source to one immutable model version and one completion policy. The library envelope (logging, messaging, metricEmission, heartbeat, streaming, credentials, parameters, health, hierarchy, identity, topic, tags) is owned by the canonical schema and is deliberately not redeclared here. `additionalProperties` is `false` throughout, so a typo'd key is rejected at deploy time instead of silently ignored; the component's own candidate validator (`image_processor.config.validate`) then applies the cross-field rules a schema cannot express.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "defaults": {
+    "paths": {
+      "title": "Durable state locations",
+      "description": "Where the component keeps the state it owns. Each path is absolute, and each stays outside every spool root the component mutates.",
       "type": "object",
       "additionalProperties": false,
-      "description": "Defaults applied to every route that does not override them.",
       "properties": {
-        "tickMs": {
+        "stateDb": {
+          "$ref": "#/$defs/absolutePath",
+          "default": "/var/lib/edgecommons/image-processor/state.db",
+          "description": "The SQLite job ledger and outbox. The database runs in WAL mode, so the directory also holds the `-wal` and `-shm` files. Changing this path on a configuration reload is rejected: the ledger cannot move under a running process."
+        },
+        "modelCache": {
+          "$ref": "#/$defs/absolutePath",
+          "default": "/var/lib/edgecommons/image-processor/models",
+          "description": "The content-addressed bundle cache. Each verified bundle lives under its own tarball digest, so two routes that name the same digest share one copy on disk and one session on the GPU."
+        },
+        "staging": {
+          "$ref": "#/$defs/absolutePath",
+          "default": "/var/lib/edgecommons/image-processor/staging",
+          "description": "Processor-owned scratch space: downloaded bundles before verification, and the immutable copies of trigger images that executor cells read. Every route's `source.inlineStaging` sits under this directory."
+        }
+      }
+    },
+    "runtime": {
+      "title": "ONNX Runtime execution profile",
+      "description": "Which execution providers the component may create sessions on, and how much loading work runs at once.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "default": ["CUDAExecutionProvider"],
+          "items": { "$ref": "#/$defs/executionProvider" },
+          "description": "The execution providers a session may use, in preference order. A model bundle declares the providers it permits; a route runs only where the two agree.",
+          "examples": [["TensorrtExecutionProvider", "CUDAExecutionProvider"]]
+        },
+        "requiredProvider": {
+          "oneOf": [{ "$ref": "#/$defs/executionProvider" }, { "type": "null" }],
+          "default": "CUDAExecutionProvider",
+          "description": "The provider a session must actually be assigned. A route whose session lands on anything else fails closed rather than degrading silently. Set it to `null` to accept any provider listed in `providers`."
+        },
+        "allowCpuOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the component may run inference on `CPUExecutionProvider` alone. This is a development setting: on a production route it turns a missing GPU into a silent throughput collapse instead of a reported failure."
+        },
+        "executorCellsPerGpu": {
           "type": "integer",
           "minimum": 1,
-          "default": 10000,
-          "description": "How often stateful stages are ticked. A stage that emits on time rather than on arrival (a window, a batch, a debounce) produces its output on this cadence."
+          "default": 1,
+          "description": "How many executor subprocesses serve one GPU. One cell per GPU owns one CUDA context and one session cache; more cells raise device-memory overhead and widen the blast radius of a cell restart."
         },
-        "maxQueue": {
+        "loadConcurrencyPerGpu": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "How many model loads run concurrently on one GPU. A load allocates its peak device memory before it reaches steady state, so raising this raises the chance that two peaks collide."
+        }
+      }
+    },
+    "gpu": {
+      "title": "Device selection and memory budget",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "default": ["0"],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A CUDA device ordinal (`\"0\"`) or a device UUID (`\"GPU-6f1c...\"`)."
+          },
+          "description": "The devices the component may place sessions on. The component starts one executor cell per listed device."
+        },
+        "residentMemoryBudgetPercent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 80,
+          "description": "The share of each device's total memory that resident model sessions may occupy. The remainder absorbs activation peaks, allocator fragmentation, and any co-located process."
+        },
+        "reserveMiB": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2048,
+          "description": "Device memory held back from the residency budget in absolute terms. Admission subtracts this reserve from free memory before it compares against a model's estimate, so a load never consumes the last free megabyte."
+        }
+      }
+    },
+    "scheduler": {
+      "title": "Queueing, batching, and residency",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxBatchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "The largest micro-batch the scheduler forms from same-model, compatible-shape jobs. Batching applies only when the bundle manifest declares a dynamic batch axis; a value of `1` disables it."
+        },
+        "maxBatchLatencyMs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 20,
+          "description": "How long a partially filled batch waits for a sibling job before it runs as is. This is the latency a batch may add, not a queueing timeout."
+        },
+        "hotTtlSecs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 120,
+          "description": "How long an idle session stays resident before it becomes an eviction candidate. Reloading a bundle costs seconds, so a short value on a busy device trades latency for capacity."
+        },
+        "minResidencySecs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 15,
+          "description": "The minimum time a freshly loaded session is protected from eviction. It stops two competing models from evicting each other on every arrival."
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5,
+          "description": "How many times a job may be attempted before its retry budget is exhausted and it moves to `PROCESSING_EXHAUSTED`. Attempts count transient execution and model failures; a permanent input failure never retries."
+        },
+        "retryBackoffSecs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 2,
+          "description": "The delay before the first retry. Later retries back off exponentially from this value."
+        },
+        "maxRetryBackoffSecs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 300,
+          "description": "The ceiling on the exponential retry delay."
+        },
+        "queueAgeWarningSecs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 300,
+          "description": "The age of the oldest queued job at which a route reports a degraded condition on `evt`. Backlog never discards admitted work, so this threshold is how an operator learns that evidence delivery is falling behind."
+        }
+      }
+    },
+    "discovery": {
+      "title": "Spool discovery cadence",
+      "description": "How a spool route finds work. Filesystem state is authoritative: OS notifications only nudge a walk, and the periodic walk runs whether or not a notification ever arrives, so a missed event delays a job rather than losing it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rescanSecs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 60,
+          "description": "How often a route walks its root with no notification at all. This is the interval within which a file whose event was dropped is still found."
+        },
+        "debounceMs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 500,
+          "description": "How long notifications must stop before a nudged walk runs. A camera writing a burst of files produces one walk rather than one per file; `0` walks on every nudge."
+        }
+      }
+    },
+    "publish": {
+      "title": "Confirmed publication of the inference result",
+      "description": "The result on `app/inference/result` is the only cleanup-gating output. It is prepared once, stored byte for byte in the ledger, and published with positive transport confirmation.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confirmationTimeoutSecs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 10,
+          "description": "How long one publish attempt waits for a PUBACK at QoS 1, or for the Greengrass IPC publish operation to complete, before it counts as a failed attempt. The stored bytes are retried unchanged."
+        },
+        "requireConfirmationBeforeCleanup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether archive, delete, and quarantine wait for transport confirmation. Turning it off lets the component reclaim disk during a long broker outage at the cost of the evidence guarantee, so a regulated deployment leaves it on."
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100,
+          "description": "How many publish attempts one outbox row makes before the job moves to `PUBLISH_EXHAUSTED` and waits for the `retry-publication` command. The row and its bytes are kept."
+        },
+        "outboxCapacity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100000,
+          "description": "How many rows the outbox holds. This bounds the count of pending publications; `outboxReserveBudgetMiB` bounds their size."
+        },
+        "outboxReserveBudgetMiB": {
           "type": "integer",
           "minimum": 1,
           "default": 256,
-          "description": "How many messages may be queued for a route before new ones are dropped and counted. Bounded on purpose: an unbounded queue does not remove backpressure, it relocates the failure to the heap."
+          "description": "How much outbox and evidence capacity admission may hold in total. A job is admitted only after it reserves room for the largest result its route can produce, so a finished job is never stranded by a full outbox; when the reserve cannot be met the component stops claiming new work and reports the pressure."
+        }
+      }
+    },
+    "signing": {
+      "title": "Model bundle signature policy",
+      "description": "Bundle digests are verified always. Signatures are Ed25519 detached signatures over `manifest.json`, and trust is a list of public keys named by `keyId`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether a bundle without a valid signature from a trusted key is refused at staging. A regulated deployment sets it to `true`; with `false` a signature that is present is still verified."
+        },
+        "trustedKeys": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/trustedKey" },
+          "description": "The public keys whose signatures the component accepts. A manifest names the key that signed it by `keyId`."
+        }
+      }
+    },
+    "modelSources": {
+      "title": "Where bundles may be fetched from",
+      "description": "The transport controls that apply to every `models[].uri`. They bound what a configuration change can make the component download.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowedSchemes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "default": ["s3", "https", "file"],
+          "items": { "enum": ["s3", "https", "file"] },
+          "description": "The URI schemes a model source may use. `file` also covers a plain absolute path."
+        },
+        "allowedUriPrefixes": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "An allowlist of URI prefixes. When it is non-empty, every `models[].uri` starts with one of them. An empty list allows any URI whose scheme is permitted.",
+          "examples": [["s3://approved-models/", "https://models.example.com/edgecommons/"]]
+        },
+        "verifyTls": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether `https://` sources verify the server certificate chain and hostname. Turning it off is a development setting."
+        }
+      }
+    },
+    "models": {
+      "title": "Desired model set",
+      "description": "The bundles this device makes available. The component stages each entry into the content-addressed cache, verifies it, warms it, and only then lets a route switch to it; a route names the entry it uses through `modelRef`.",
+      "type": "array",
+      "default": [],
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/modelEntry" }
+    },
+    "completionDefaults": {
+      "title": "Default completion policy",
+      "description": "The completion actions every route inherits. A route overrides any of them in its own `completion` block, which is also where the archive and quarantine directories live.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "onSuccess": {
+          "$ref": "#/$defs/completionAction",
+          "default": "archive",
+          "description": "What happens to the input after the result is published and confirmed."
+        },
+        "onInvalidInput": {
+          "$ref": "#/$defs/completionAction",
+          "default": "quarantine",
+          "description": "What happens to an input that can never succeed: a corrupt or undecodable image, a digest that does not match its sidecar, a reference that escapes its root."
+        },
+        "onOperationalFailure": {
+          "$ref": "#/$defs/completionAction",
+          "default": "retainInPlace",
+          "description": "What happens when inference exhausts its retry budget. The input is intact, so retaining it keeps a later reprocess possible."
+        },
+        "onPublishFailure": {
+          "$ref": "#/$defs/completionAction",
+          "default": "retainInPlace",
+          "description": "What happens when publication exhausts its attempts. The result is already committed and the outbox row is kept, so the input is retained until an operator runs `retry-publication`."
+        },
+        "onCollision": {
+          "$ref": "#/$defs/collisionPolicy",
+          "default": "fail"
         }
       }
     }
@@ -29,79 +305,380 @@
   "$defs": {
     "route": {
       "title": "One route",
-      "description": "One entry of `component.instances[]`. Routes are independent — one thread each — so a slow route cannot stall another, and per-key state inside a stage needs no lock.",
+      "description": "One entry of `component.instances[]`. A route binds one input source to one immutable model version, one set of outputs, and one completion policy. The route id is the `{instance}` token of every topic the route publishes on. Routes are independent, so a backlog on one never stalls another.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "publishTopic"],
+      "required": ["id", "source", "modelRef"],
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-          "description": "Unique route id. It is the `{instance}` token of this route's UNS topics and of the identity stamped on everything it publishes, so it must be a valid UNS token (lower-kebab)."
+          "description": "Unique route id. It is the `{instance}` token of this route's UNS topics and of the identity stamped on everything it publishes, so it must be a valid UNS token (lower-kebab).",
+          "examples": ["clearance-cam-01"]
         },
-        "subscribe": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 },
-          "description": "Topic filters this route consumes. Wildcards are allowed.",
-          "examples": [["ecv1/+/+/+/data/#"]]
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the route claims new work. A disabled route keeps its ledger rows and its durable state, and in-flight jobs finish. Use it to retire a camera without losing its history."
         },
-        "publishTopic": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The topic the transformed result is published on. A processor is payload-agnostic and republishes onto a topic its config names — which is why it uses the raw get_messaging() surface rather than the data() facade, whose topic and body shape are its own."
-        },
-        "target": {
-          "enum": ["local", "northbound"],
-          "default": "local",
-          "description": "Where the result goes. `local` = the device-local bus. `northbound` = the northbound broker."
-        },
-        "pipeline": {
-          "type": "array",
-          "description": "The stages, in order. Each takes a message and returns zero or more messages, so a stage can filter, map, or fan out. An empty pipeline is a pass-through republisher.",
-          "items": { "$ref": "#/$defs/stage" }
-        },
-        "maxQueue": {
+        "priority": {
           "type": "integer",
-          "minimum": 1,
-          "description": "Per-route override of the queue bound."
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 0,
+          "description": "The route's weight when the scheduler picks among ready jobs. Higher wins, and job age is weighted alongside it so a low-priority route never starves."
         },
-        "tickMs": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Per-route override of the stage tick cadence."
+        "source": {
+          "title": "Input source",
+          "description": "Where this route's images come from. `kind` discriminates: `spool` watches a directory the component owns, `trigger` subscribes to topics that carry an inline image or a file reference.",
+          "oneOf": [
+            { "$ref": "#/$defs/spoolSource" },
+            { "$ref": "#/$defs/triggerSource" }
+          ]
+        },
+        "modelRef": {
+          "$ref": "#/$defs/modelRef",
+          "description": "The model version this route runs. It names an entry of `component.global.models[]` by id, version, and digest; a route is pinned to one immutable model generation at a time."
+        },
+        "outputs": { "$ref": "#/$defs/outputs" },
+        "completion": { "$ref": "#/$defs/completion" },
+        "reprocessExistingOnModelChange": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether activating a new model digest replays inputs that already reached a terminal state under the previous digest. It is off by default, because a model upgrade on a busy spool would otherwise re-infer the entire archive; an operator can still request a replay with a command."
         }
       }
     },
-    "stage": {
-      "title": "One pipeline stage",
-      "description": "A single-key object naming the stage and its arguments. Add your own here as you register it in `image_processor/pipeline.py`'s stage table — the schema and that table are one contract.",
+    "spoolSource": {
+      "title": "Spool source",
+      "description": "A directory of finalized image files that this component owns. Filesystem state is authoritative: OS notifications only nudge a scan, and a periodic authoritative rescan recovers anything a notification missed. Only regular files under the root are accepted, and symlinks and path escapes are rejected.",
       "type": "object",
       "additionalProperties": false,
-      "minProperties": 1,
-      "maxProperties": 1,
+      "required": ["kind", "root", "readiness"],
       "properties": {
-        "fieldEquals": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["path", "value"],
-          "description": "Keep only messages whose dotted body path equals a value; drop the rest.",
-          "properties": {
-            "path": {
-              "type": "string",
-              "minLength": 1,
-              "description": "A dotted path into the message body, e.g. `signal.id`."
-            },
-            "value": {
-              "description": "The value the path must equal. Any JSON type."
-            }
-          }
+        "kind": { "const": "spool" },
+        "root": {
+          "$ref": "#/$defs/absolutePath",
+          "description": "The directory tree this route reads. Exactly one component may mutate a given spool, so no two routes with a mutating completion policy name overlapping roots.",
+          "examples": ["/var/spool/camera-adapter/cam-01"]
         },
-        "countPerTick": {
-          "type": "object",
-          "additionalProperties": false,
-          "description": "Accumulate arrivals and emit one rollup per tick. The stateful half of the stage abstraction: it emits nothing on arrival and produces its output in `on_tick`. Windows, batches and debounces are all this shape."
+        "include": {
+          "type": "array",
+          "uniqueItems": true,
+          "default": ["**/*.jpg", "**/*.jpeg", "**/*.png", "**/*.tif", "**/*.tiff"],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Glob patterns, matched against the path relative to `root` with `/` separators. A file matches at least one pattern to be considered."
+        },
+        "exclude": {
+          "type": "array",
+          "uniqueItems": true,
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Glob patterns that veto a match from `include`. Use it to skip a camera's own working subdirectory.",
+          "examples": [["**/.tmp/**"]]
+        },
+        "readiness": { "$ref": "#/$defs/readiness" },
+        "camera": { "$ref": "#/$defs/cameraBinding" }
+      }
+    },
+    "triggerSource": {
+      "title": "Trigger source",
+      "description": "Topic filters whose messages each carry one image. The body is either an inline binary image bounded by the core envelope's 64 KiB binary-body cap, or a file reference `{relativePath, sha256, bytes}` resolved under `fileRoot`. When the envelope carries `reply_to`, the route publishes the bounded result summary as the correlated reply as well as on its normal outputs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "subscribe", "fileRoot", "inlineStaging"],
+      "properties": {
+        "kind": { "const": "trigger" },
+        "subscribe": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The topic filters this route consumes. Wildcards are allowed.",
+          "examples": [["ecv1/+/inspection-ui/+/app/inspect/request"]]
+        },
+        "fileRoot": {
+          "$ref": "#/$defs/absolutePath",
+          "description": "The directory a file reference resolves under. `relativePath` is resolved inside this root and rejected if it escapes; `sha256` and `bytes` are verified against the file before the job is admitted.",
+          "examples": ["/var/spool/inspection"]
+        },
+        "inlineStaging": {
+          "$ref": "#/$defs/absolutePath",
+          "description": "Where inline image bytes are written before inference. The path sits under `component.global.paths.staging`, because the staged copy is processor-owned and immutable for the life of the job."
+        },
+        "maxInlineBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536,
+          "default": 65536,
+          "description": "The largest inline image this route accepts. The ceiling is the core envelope's binary-body cap of 65536 bytes; a larger image arrives as a file reference."
         }
       }
+    },
+    "readiness": {
+      "title": "Readiness rule",
+      "description": "How the route decides that a file is finalized and safe to read. Readiness is the guard against inferring on a half-written image.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "enum": ["cameraSidecar", "cameraStatus", "marker", "stability"],
+          "description": "The evidence the route accepts as proof of finalization. `cameraSidecar`: the camera metadata sidecar `<image>.json` exists, parses, and its `image.bytes` and `image.sha256` match the file; camera-adapter writes the sidecar before the image becomes visible, so a visible image with a sidecar is complete by construction, which is why a regulated route uses this mode. `cameraStatus`: a `SUCCEEDED` record from the camera's paged `sb/capture-status` names the file and its digest verifies. `marker`: a companion file `<path><markerSuffix>` exists. `stability`: size and mtime are unchanged for `quietSecs`, the weakest rule and the only one that infers finalization instead of observing it, so it is not permitted on a camera-bound route."
+        },
+        "quietSecs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 5,
+          "description": "How long size and mtime stay unchanged before `stability` mode calls a file finalized. The other modes ignore it."
+        },
+        "markerSuffix": {
+          "type": "string",
+          "minLength": 1,
+          "default": ".done",
+          "description": "The suffix appended to the image path to form the companion marker file in `marker` mode. The other modes ignore it.",
+          "examples": [".done", ".complete"]
+        }
+      }
+    },
+    "cameraBinding": {
+      "title": "Camera binding",
+      "description": "The camera whose spool this route reads. The binding buys two things: a low-latency capture hint, and paged reconciliation of the camera's capture status. Neither is a queue - a lost hint delays a job, it never loses one, because the authoritative rescan finds the file anyway.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "instance"],
+      "properties": {
+        "component": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "default": "camera-adapter",
+          "description": "The UNS `{component}` token of the camera that writes this spool."
+        },
+        "instance": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "The UNS `{instance}` token of the camera route that writes this spool.",
+          "examples": ["cam-01"]
+        },
+        "subscribeAnnouncements": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to subscribe to the camera's `app/image/captured` announcements as a discovery hint. The processor maps `image.relativePath` under its own `root`, never trusts `image.absolutePath`, and verifies `image.bytes` and `image.sha256` against the file."
+        },
+        "reconcileCaptureStatusSecs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 30,
+          "description": "How often to page the camera's `sb/capture-status` for captures the hints missed. Reconciliation follows every `nextCursor`, deduplicates by `captureId`, and records its watermark. Set it to `0` to disable reconciliation."
+        }
+      }
+    },
+    "modelRef": {
+      "title": "Model reference",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": { "$ref": "#/$defs/modelId" },
+        "version": { "$ref": "#/$defs/modelVersion" },
+        "digest": {
+          "$ref": "#/$defs/digest",
+          "description": "The SHA-256 of the bundle tarball. Naming the digest is what makes the reference immutable: a republished version under the same id and version is a different bundle and is refused."
+        }
+      }
+    },
+    "modelEntry": {
+      "title": "One model bundle",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest", "uri"],
+      "properties": {
+        "id": { "$ref": "#/$defs/modelId" },
+        "version": { "$ref": "#/$defs/modelVersion" },
+        "digest": {
+          "$ref": "#/$defs/digest",
+          "description": "The expected SHA-256 of the bundle tarball. The component verifies it before it extracts anything."
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(s3://|https://|file://|/|[A-Za-z]:[\\\\/])",
+          "description": "Where to fetch the tarball: an `s3://` object, an `https://` URL, a `file://` URL, or a local absolute path. The scheme is permitted by `modelSources.allowedSchemes`, and the URI matches `modelSources.allowedUriPrefixes` when that allowlist is non-empty.",
+          "examples": ["s3://approved-models/line-clearance-cam-01/2026.08.20.tar.gz"]
+        },
+        "credentials": {
+          "$ref": "#/$defs/secretRef",
+          "description": "The credentials for the source. The component resolves this reference itself through the credentials vault at fetch time; omit it to use ambient or token-exchange credentials."
+        },
+        "activation": {
+          "title": "Activation policy",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requireWarmup": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the bundle's golden warmup samples reproduce their expected outputs on the target provider before a route may switch to it. A model that fails warmup degrades its routes instead of serving wrong answers."
+            },
+            "retainForRollback": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the previous generation stays in the cache after the switch. Garbage collection never removes a retained rollback generation."
+            }
+          }
+        }
+      }
+    },
+    "outputs": {
+      "title": "Route outputs",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "writeResultSidecar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to install the evidence sidecar `<image>.inference.json` beside the input. The sidecar carries the full result even when the published message is a bounded summary, and it is immutable once installed."
+        },
+        "decisionSignals": {
+          "type": "array",
+          "default": [],
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/decisionSignal" },
+          "description": "The normalized readings mirrored onto `data/<signalId>`. The mirror is best effort and never cleanup-gating; a consumer that enforces a safety gate subscribes to `app/inference/result` instead."
+        }
+      }
+    },
+    "decisionSignal": {
+      "title": "One mirrored decision signal",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "value"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(?:/[A-Za-z0-9][A-Za-z0-9._-]*)*$",
+          "maxLength": 128,
+          "description": "The signal id. It becomes the channel of `ecv1/{device}/image-processor/{routeId}/data/<id>`, so it may contain `/` to nest but never a wildcard character.",
+          "examples": ["line-clearance/pass"]
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^\\$",
+          "minLength": 2,
+          "maxLength": 512,
+          "description": "A JSONPath expression evaluated against the committed result body. It starts at the document root `$`.",
+          "examples": ["$.decision.confidence"]
+        }
+      }
+    },
+    "completion": {
+      "title": "Route completion policy",
+      "description": "What happens to the input after a job reaches a terminal outcome. Every action is preceded by a persisted cleanup intent, so a crash mid-move is reconciled from observed state rather than guessed at; a failed action is recorded as `CLEANUP_FAILED` and retried, never reported as success. Unset actions inherit `component.global.completionDefaults`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "onSuccess": { "$ref": "#/$defs/completionAction" },
+        "onInvalidInput": { "$ref": "#/$defs/completionAction" },
+        "onOperationalFailure": { "$ref": "#/$defs/completionAction" },
+        "onPublishFailure": { "$ref": "#/$defs/completionAction" },
+        "onCollision": { "$ref": "#/$defs/collisionPolicy" },
+        "archiveDir": {
+          "$ref": "#/$defs/absolutePath",
+          "description": "Where `archive` moves the input and its companion files. It is required when any action resolves to `archive`, and it sits outside every spool root the component mutates so archived evidence is never rediscovered as new input.",
+          "examples": ["/var/spool/image-processor/processed/cam-01"]
+        },
+        "failedDir": {
+          "$ref": "#/$defs/absolutePath",
+          "description": "Where `quarantine` moves the input and its companion files. Leave it unset to quarantine in place: the ledger records the terminal state and the file stays where it is, which is the right answer when the input directory is itself the evidence store.",
+          "examples": ["/var/spool/image-processor/failed/cam-01"]
+        }
+      }
+    },
+    "completionAction": {
+      "title": "Completion action",
+      "enum": ["archive", "delete", "retainInPlace", "quarantine"],
+      "description": "What happens to the input file and its companions. `archive`: move them to `archiveDir`. `delete`: remove them. `retainInPlace`: leave them where they are and record the outcome in the ledger. `quarantine`: move them to `failedDir`, or leave them in place when no `failedDir` is set."
+    },
+    "collisionPolicy": {
+      "title": "Collision policy",
+      "enum": ["fail", "suffix"],
+      "description": "What happens when a completion action's target path already holds a different object. `fail` records `CLEANUP_FAILED` and leaves both files intact, so the job waits for `retry-cleanup` or an operator. `suffix` installs the input beside the occupant under a deterministic name derived from its own digest, so the move completes and the name is reproducible from the ledger. Neither policy overwrites the object already there: evidence is never replaced."
+    },
+    "trustedKey": {
+      "title": "One trusted signing key",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyId", "publicKey"],
+      "properties": {
+        "keyId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+          "description": "The identifier a manifest uses to name the key that signed it.",
+          "examples": ["pharma-model-publisher-1"]
+        },
+        "publicKey": {
+          "description": "The Ed25519 public key, either inline as a PEM or base64 string, or as a `$secret` reference the component resolves through the credentials vault.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "$ref": "#/$defs/secretRef" }
+          ]
+        }
+      }
+    },
+    "secretRef": {
+      "title": "Secret reference",
+      "description": "A pointer to a credentials-vault entry instead of an inline value. The component resolves it at the moment it is used, so the secret never reaches the logged or published configuration snapshot.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["$secret"],
+      "properties": {
+        "$secret": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The secret's name in the vault.",
+          "examples": ["model-signing/publisher-1"]
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One field of the secret's JSON document. Omit it to use the secret's whole string value."
+        }
+      }
+    },
+    "executionProvider": {
+      "title": "ONNX Runtime execution provider",
+      "enum": ["TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"],
+      "description": "`CUDAExecutionProvider` is the production path. `TensorrtExecutionProvider` is per-model opt-in and runs behind an engine cache, with CUDA serving requests until an engine is built. `CPUExecutionProvider` is the parity and development path and needs `runtime.allowCpuOnly`."
+    },
+    "modelId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "The bundle's model id, as published.",
+      "examples": ["line-clearance-cam-01"]
+    },
+    "modelVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$",
+      "description": "The bundle's version, as published.",
+      "examples": ["2026.08.20"]
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "A SHA-256 digest in `sha256:<64 lowercase hex>` form."
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(/|[A-Za-z]:[\\\\/]|\\\\)",
+      "description": "An absolute filesystem path. POSIX (`/var/lib/...`), Windows drive (`C:\\ProgramData\\...`), and UNC (`\\\\host\\share`) forms are all accepted, because the component runs on both platforms."
     }
   }
 }

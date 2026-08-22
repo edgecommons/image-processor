@@ -27,8 +27,9 @@ from cryptography.x509.oid import NameOID
 from image_processor.bundles import generate_keypair
 from tools.make_bundle import make_bundle
 
-#: The bundle-manifest schema this suite validates against, standing in for the WP1 contract.
-SCHEMA_PATH = Path(__file__).parent / "manifest.schema.json"
+#: The bundle-manifest contract (WP1). The suite validates against the shipped schema, so a
+#: bundle these tests accept is one the component accepts.
+SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "model-bundle-manifest.schema.json"
 
 #: A model payload small enough to keep the suite fast and large enough to stream.
 MODEL_BYTES = b"onnx-graph-" + bytes(range(256)) * 8
@@ -51,20 +52,32 @@ def manifest_document(**overrides: Any) -> Dict[str, Any]:
         "version": "2026.08.20",
         "minOnnxRuntime": "1.18.0",
         "providersPermitted": ["CUDAExecutionProvider", "CPUExecutionProvider"],
-        "providerPolicy": "required",
+        "providerPolicy": "requireListed",
         "inputs": [{"name": "images", "dtype": "float32", "shape": ["N", 3, 224, 224]}],
         "outputs": [{"name": "logits", "dtype": "float32", "shape": ["N", 2]}],
         "dynamicBatch": True,
         "family": "classification",
-        "familyParams": {"topK": 2, "activation": "softmax"},
-        "preprocess": {"resize": [224, 224], "layout": "NCHW", "mean": [0.485], "std": [0.229]},
-        "decisionRules": {"pass": "$.classes[0].label == 'clear'", "threshold": 0.8},
+        "familyParams": {"labels": ["clear", "hold"], "topK": 2, "activation": "softmax"},
+        "preprocess": {
+            "resize": {"mode": "letterbox", "width": 224, "height": 224},
+            "scale": 0.00392156862745098,
+            "mean": [0.485],
+            "std": [0.229],
+            "layout": "NCHW",
+            "colorOrder": "RGB",
+            "dtype": "float32",
+        },
+        "decisionRules": {
+            "pass": {"path": "$.classes[0].label", "op": "==", "value": "clear"},
+            "confidence": "$.classes[0].score",
+            "threshold": 0.8,
+        },
         "maxResultItems": 10,
         "estimatedDeviceMiB": 512,
         "warmup": [{"input": "warmup/input-01.bin", "expected": "warmup/expected-01.json"}],
-        "tolerances": {"score": 0.001},
+        "tolerances": {"absolute": 0.001, "relative": 0.001},
         "compatibilityKeys": {"gpuClass": "sm_86", "tensorrt": "10.0"},
-        "provenance": {"publisher": "pharma-mlops", "builtAtMs": 1755820800000},
+        "provenance": {"publisher": "pharma-mlops", "publishedAt": "2026-08-22T00:00:00Z"},
         "keyId": KEY_ID,
         "transformVersion": "2026.08.20-1",
     }
