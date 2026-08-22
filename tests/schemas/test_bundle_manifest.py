@@ -29,25 +29,44 @@ def manifest() -> dict:
         "dynamicBatch": True,
         "family": "detection",
         "familyParams": {
-            "decoder": "yolox",
+            "decode": "yoloxGrid",
+            "labels": ["bolt", "nut", "washer"],
             "strides": [8, 16, 32],
-            "numClasses": 80,
+            "objectness": True,
+            "scoreActivation": "sigmoid",
+            "objectnessActivation": "sigmoid",
             "scoreThreshold": 0.25,
             "iouThreshold": 0.45,
             "maxDetections": 100,
         },
         "preprocess": {
-            "resize": {"mode": "letterbox", "width": 640, "height": 640, "padValue": [114, 114, 114]},
-            "normalize": {"scale": 1.0, "mean": [0, 0, 0], "std": [1, 1, 1]},
+            "resize": {
+                "mode": "letterbox",
+                "width": 640,
+                "height": 640,
+                "padColor": [114, 114, 114],
+                "padMode": "center",
+            },
+            "scale": 0.00392156862745098,
+            "mean": [0.485, 0.456, 0.406],
+            "std": [0.229, 0.224, 0.225],
             "layout": "NCHW",
             "colorOrder": "RGB",
             "dtype": "float32",
+            "highBitDepthMode": "scaleTo8Bit",
         },
         "decisionRules": {
-            "pass": "$.detections[?(@.label=='foreign-object')] == []",
+            "pass": {
+                "all": [
+                    {"path": "$.detections[*].label", "op": "!=", "value": "foreign-object"},
+                    {"path": "$.detections[0].score", "op": ">=", "value": 0.5},
+                ]
+            },
             "confidence": "$.detections[0].score",
             "threshold": 0.5,
-            "outcome": {"whenPass": "CLEAR", "whenFail": "HOLD", "whenUnevaluable": "HOLD"},
+            "outcomeOnPass": "CLEAR",
+            "outcomeOnFail": "HOLD",
+            "failOnEmpty": False,
         },
         "maxResultItems": 100,
         "estimatedDeviceMiB": 900,
@@ -85,9 +104,11 @@ def test_a_complete_manifest_validates(manifest_schema):
 @pytest.mark.parametrize(
     "family, params",
     [
-        ("classification", {"topK": 5, "activation": "softmax", "labelsFile": "labels.json"}),
-        ("segmentation", {"numClasses": 21, "threshold": 0.5, "ignoreIndex": 0}),
-        ("anomaly", {"threshold": 0.7, "higherIsAnomalous": True, "maxRegions": 5}),
+        ("classification", {"labels": ["clear", "hold"], "topK": 5, "activation": "softmax"}),
+        ("segmentation", {"numClasses": 21, "mode": "threshold", "threshold": 0.5,
+                          "ignoreIndex": 0, "positiveLabel": "defect"}),
+        ("anomaly", {"threshold": 0.7, "source": "mapMax", "direction": "higherIsAnomalous",
+                     "normalization": {"min": 0, "max": 4}}),
     ],
 )
 def test_every_task_family_has_its_own_parameters(manifest_schema, family, params):
@@ -130,9 +151,44 @@ def test_a_family_rejects_another_familys_parameters(manifest_schema):
             id="providers-are-closed",
         ),
         pytest.param(
-            lambda m: m["decisionRules"]["outcome"].update(whenFail="CLEAR"),
+            lambda m: m["decisionRules"].update(outcomeOnFail="CLEAR"),
             "CLEAR",
             id="a-failed-rule-never-clears",
+        ),
+        pytest.param(
+            lambda m: m["decisionRules"].update(pass_=1) or m["decisionRules"].pop("pass"),
+            "pass",
+            id="rules-need-a-pass-expression",
+        ),
+        pytest.param(
+            lambda m: m["decisionRules"]["pass"]["all"].append({"path": "$.x", "op": "~="}),
+            "~=",
+            id="operators-are-closed",
+        ),
+        pytest.param(
+            lambda m: m["decisionRules"]["pass"]["all"].append({"path": "detections", "op": "exists"}),
+            "detections",
+            id="a-path-starts-at-the-root",
+        ),
+        pytest.param(
+            lambda m: m["familyParams"].pop("strides"),
+            "strides",
+            id="a-grid-head-needs-its-strides",
+        ),
+        pytest.param(
+            lambda m: m["familyParams"].update(decode="magic"),
+            "magic",
+            id="decoders-are-closed",
+        ),
+        pytest.param(
+            lambda m: m["preprocess"]["resize"].update(interpolation="magic"),
+            "magic",
+            id="interpolation-is-closed",
+        ),
+        pytest.param(
+            lambda m: m["preprocess"].update(highBitDepthMode="truncate"),
+            "truncate",
+            id="bit-depth-modes-are-closed",
         ),
         pytest.param(
             lambda m: m["decisionRules"].update(confidence="decision.confidence"),

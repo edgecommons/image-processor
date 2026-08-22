@@ -207,10 +207,10 @@
     },
     "preprocess": {
       "title": "Decode and preprocessing",
-      "description": "How an executor cell turns decoded pixels into the model's input tensor. The component applies exactly this, so two bundles that share a transform version and a preprocess block produce comparable numbers.",
+      "description": "How an executor cell turns decoded pixels into the model's input tensor. The component applies exactly this and nothing else, so two bundles that share a transform version and a preprocess block produce comparable numbers. The pipeline is: decode, reduce a high-bit-depth image per `highBitDepthMode`, swap to `colorOrder`, resize per `resize`, apply `(pixel * scale - mean) / std`, then lay the result out as `layout` in `dtype`.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["resize", "layout", "colorOrder", "dtype"],
+      "required": ["resize"],
       "properties": {
         "inputName": {
           "type": "string",
@@ -218,134 +218,198 @@
           "maxLength": 256,
           "description": "The input tensor the preprocessed image binds to. Omit it on a single-input model."
         },
+        "batchAxis": {
+          "type": "boolean",
+          "description": "Whether the input tensor carries a leading batch axis. Omit it to infer the axis from the input's declared rank."
+        },
         "resize": {
           "title": "Resize",
           "type": "object",
           "additionalProperties": false,
-          "required": ["mode"],
           "properties": {
             "mode": {
-              "enum": ["stretch", "letterbox", "centerCrop", "none"],
-              "description": "How the source image reaches the model's input size. `stretch`: scale both axes independently. `letterbox`: scale to fit, then pad with `padValue`, which preserves aspect ratio and is what box coordinates are un-letterboxed from. `centerCrop`: scale the short side, then crop the center. `none`: feed the image as decoded, which needs a fully dynamic input shape."
+              "enum": ["letterbox", "stretch", "centerCrop", "none"],
+              "default": "letterbox",
+              "description": "How the source image reaches the model's input size. `letterbox`: scale to fit, then pad with `padColor`, which preserves aspect ratio and is what box coordinates are un-letterboxed from. `stretch`: scale both axes independently. `centerCrop`: scale the short side, then crop the center. `none`: feed the image as decoded, which needs a fully dynamic input shape."
             },
-            "width": { "type": "integer", "minimum": 1, "description": "The model input width in pixels." },
-            "height": { "type": "integer", "minimum": 1, "description": "The model input height in pixels." },
+            "width": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The model input width in pixels. Every mode but `none` needs it."
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The model input height in pixels. Every mode but `none` needs it."
+            },
             "interpolation": {
-              "enum": ["nearest", "bilinear", "bicubic", "area"],
+              "enum": ["nearest", "bilinear", "bicubic", "lanczos", "box"],
               "default": "bilinear",
               "description": "The resampling filter. It is part of the numeric contract, so changing it changes the transform version."
             },
-            "padValue": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 4,
-              "items": { "type": "number" },
-              "default": [114, 114, 114],
-              "description": "The per-channel fill for `letterbox` padding, in the source pixel scale before normalization."
+            "padColor": {
+              "$ref": "#/$defs/channelValue",
+              "default": [0, 0, 0],
+              "description": "The fill for `letterbox` padding, as one value for every channel or one value per channel. It is expressed in `colorOrder` and in the source pixel scale, before normalization."
+            },
+            "padMode": {
+              "enum": ["center", "topLeft"],
+              "default": "center",
+              "description": "Where the scaled image sits inside the padded canvas. `center` splits the padding evenly; `topLeft` puts all of it on the right and bottom."
             }
           }
         },
-        "normalize": {
-          "title": "Normalize",
-          "description": "The affine mapping applied per channel as `(pixel * scale - mean) / std`.",
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "scale": {
-              "type": "number",
-              "default": 0.00392156862745098,
-              "description": "The factor applied to each raw pixel value before mean subtraction. The default maps `0..255` onto `0..1`."
-            },
-            "mean": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 4,
-              "items": { "type": "number" },
-              "default": [0, 0, 0],
-              "description": "The per-channel mean subtracted after scaling, in channel order.",
-              "examples": [[0.485, 0.456, 0.406]]
-            },
-            "std": {
-              "type": "array",
-              "minItems": 1,
-              "maxItems": 4,
-              "items": { "type": "number", "exclusiveMinimum": 0 },
-              "default": [1, 1, 1],
-              "description": "The per-channel standard deviation divided out after mean subtraction, in channel order.",
-              "examples": [[0.229, 0.224, 0.225]]
-            }
-          }
+        "scale": {
+          "type": "number",
+          "default": 1,
+          "description": "The factor applied to each raw pixel value before mean subtraction. Use `0.00392156862745098` to map `0..255` onto `0..1`."
+        },
+        "mean": {
+          "$ref": "#/$defs/channelValue",
+          "default": 0,
+          "description": "The mean subtracted after scaling, as one value for every channel or one value per channel, in channel order."
+        },
+        "std": {
+          "$ref": "#/$defs/channelValue",
+          "default": 1,
+          "description": "The standard deviation divided out after mean subtraction, as one value for every channel or one value per channel. No entry may be zero."
         },
         "layout": {
           "enum": ["NCHW", "NHWC"],
+          "default": "NCHW",
           "description": "The axis order of the input tensor."
         },
         "colorOrder": {
           "enum": ["RGB", "BGR"],
-          "description": "The channel order the model expects. Decoded images are RGB, so `BGR` reverses them."
+          "default": "RGB",
+          "description": "The channel order the model expects. Decoded images are RGB, so `BGR` reverses them before anything else reads a channel."
         },
         "dtype": {
           "enum": ["float32", "float16", "uint8"],
-          "description": "The element type of the input tensor after preprocessing."
+          "default": "float32",
+          "description": "The element type of the input tensor. A `uint8` model takes raw samples, so it may not also declare a `scale`, `mean`, or `std`."
         },
-        "channels": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4,
-          "default": 3,
-          "description": "How many channels the model takes. `1` converts to grayscale."
+        "highBitDepthMode": {
+          "enum": ["scaleTo8Bit", "raw"],
+          "default": "scaleTo8Bit",
+          "description": "What happens to a 16-bit image. `scaleTo8Bit` reduces it to the 0..255 range the manifest's constants are written in, so an 8-bit manifest serves a 16-bit image. `raw` keeps the full range."
         }
       }
     },
     "decisionRules": {
       "title": "Decision rules",
-      "description": "JSONPath expressions evaluated over the normalized task output. A rule that cannot evaluate yields `HOLD`, never `CLEAR`, which is why `outcome.whenUnevaluable` has only one value.",
+      "description": "The rules that turn one normalized output into the result's `decision`. Paths are JSONPath over the normalized output, so a rule can name any field its family produces. A rule that cannot be evaluated - a path that matches nothing, a confidence that is not a number, an `outcomeOnFail` of `CLEAR` - holds the image rather than clearing it.",
       "type": "object",
       "additionalProperties": false,
       "required": ["pass"],
       "properties": {
         "pass": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 512,
-          "description": "The expression that decides `decision.pass`. It is a JSONPath over the normalized output, optionally compared against a literal or against `threshold`.",
-          "examples": ["$.classes[0].score >= threshold"]
+          "$ref": "#/$defs/decisionExpression",
+          "description": "The expression that decides the outcome."
         },
         "confidence": {
+          "description": "The number reported as `decision.confidence`, either a literal or a JSONPath that resolves to one. Omit it when the family produces no single confidence.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string", "minLength": 2, "maxLength": 512, "pattern": "^[$]" }
+          ],
+          "examples": ["$.classes[0].score"]
+        },
+        "threshold": {
+          "description": "The number reported as `decision.threshold`, either a literal or a JSONPath that resolves to one, so a consumer can see the bar that was applied.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string", "minLength": 2, "maxLength": 512, "pattern": "^[$]" }
+          ],
+          "examples": [0.9, "$.anomaly.threshold"]
+        },
+        "outcomeOnPass": {
+          "enum": ["CLEAR", "HOLD", "FAIL"],
+          "default": "CLEAR",
+          "description": "The outcome when the expression holds. An advisory model sets it to `HOLD` so a pass still requires a human."
+        },
+        "outcomeOnFail": {
+          "enum": ["HOLD", "FAIL"],
+          "default": "HOLD",
+          "description": "The outcome when the expression does not hold. `FAIL` classes the failure as a defect rather than a doubt. `CLEAR` is not available here."
+        },
+        "failOnEmpty": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether a path that matches nothing is a plain failure rather than a broken rule. It is what lets a rule such as 'there are no defects' evaluate on an image with no detections at all."
+        }
+      }
+    },
+    "decisionExpression": {
+      "title": "Decision expression",
+      "description": "A leaf comparison, or a group of expressions. Groups nest to any depth.",
+      "oneOf": [
+        { "$ref": "#/$defs/decisionLeaf" },
+        {
+          "title": "All of",
+          "description": "Holds when every child holds.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": { "$ref": "#/$defs/decisionExpression" },
+              "description": "The child expressions."
+            }
+          }
+        },
+        {
+          "title": "Any of",
+          "description": "Holds when at least one child holds.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": { "$ref": "#/$defs/decisionExpression" },
+              "description": "The child expressions."
+            }
+          }
+        }
+      ]
+    },
+    "decisionLeaf": {
+      "title": "Leaf comparison",
+      "description": "One comparison against one JSONPath. A path that matches several values is a claim about every match: `$.detections[*].label != washer` means no detection is a washer.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "op"],
+      "properties": {
+        "path": {
           "type": "string",
           "minLength": 2,
           "maxLength": 512,
           "pattern": "^[$]",
-          "description": "The JSONPath whose value becomes `decision.confidence`. Omit it when the family produces no single confidence.",
-          "examples": ["$.classes[0].score"]
+          "description": "A JSONPath over the normalized output, starting at the document root `$`.",
+          "examples": ["$.segments.defect.pixels"]
         },
-        "threshold": {
-          "type": "number",
-          "description": "The number `pass` compares against, republished as `decision.threshold` so a consumer can see the bar that was applied."
+        "op": {
+          "enum": [">=", ">", "<=", "<", "==", "!=", "exists", "absent", "count>="],
+          "description": "The comparison. `>=`, `>`, `<=`, and `<` need numbers on both sides. `==` and `!=` compare against the literal in `value` and work for numbers, strings, and booleans. `exists` and `absent` describe the match set and take no `value`. `count>=` compares the size of the match set against `value`."
         },
-        "outcome": {
-          "title": "Outcome mapping",
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "whenPass": {
-              "enum": ["CLEAR", "HOLD"],
-              "default": "CLEAR",
-              "description": "The outcome when `pass` evaluates true. An advisory model sets it to `HOLD` so a pass still requires a human."
-            },
-            "whenFail": {
-              "enum": ["HOLD", "FAIL"],
-              "default": "HOLD",
-              "description": "The outcome when `pass` evaluates false. `CLEAR` is not available here."
-            },
-            "whenUnevaluable": {
-              "const": "HOLD",
-              "default": "HOLD",
-              "description": "The outcome when the rules cannot be evaluated at all. It is always `HOLD`."
-            }
-          }
+        "value": {
+          "description": "The literal the path is compared against. `exists` and `absent` take none."
         }
       }
+    },
+    "channelValue": {
+      "title": "Per-channel constant",
+      "description": "One value applied to every channel, or one value per channel in channel order.",
+      "oneOf": [
+        { "type": "number" },
+        { "type": "array", "minItems": 1, "maxItems": 4, "items": { "type": "number" } }
+      ]
     },
     "warmupSample": {
       "title": "One warmup sample",
@@ -407,82 +471,259 @@
         "notes": { "type": "string", "maxLength": 2048, "description": "Anything else an auditor needs." }
       }
     },
+    "labelSet": {
+      "title": "Class labels",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": { "type": "string", "minLength": 1, "maxLength": 256 },
+      "description": "The class names, in model index order. A family with neither `labels` nor `numClasses` cannot name what it found."
+    },
+    "numClasses": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "How many classes the head predicts, when the bundle names a count rather than labels. The normalized output then reports `class-<index>`."
+    },
     "classificationParams": {
       "title": "Classification parameters",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "topK": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 5, "description": "How many classes the normalized output keeps, after sorting by descending score." },
-        "activation": { "enum": ["softmax", "sigmoid", "none"], "default": "softmax", "description": "The activation applied to the raw logits. `none` means the graph already emits probabilities." },
-        "scoreThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0, "description": "The lowest score a class needs to appear in the output." },
-        "labelsFile": { "$ref": "#/$defs/bundlePath", "default": "labels.json", "description": "The bundle file that maps class indexes to labels." },
-        "outputName": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the logits. Omit it on a single-output model." }
+        "labels": { "$ref": "#/$defs/labelSet" },
+        "numClasses": { "$ref": "#/$defs/numClasses" },
+        "activation": {
+          "enum": ["none", "softmax", "sigmoid"],
+          "default": "softmax",
+          "description": "The activation applied to the raw scores. `softmax` makes the class set sum to one, `sigmoid` scores each class independently, and `none` reports the raw value."
+        },
+        "topK": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 5,
+          "description": "How many classes the normalized output keeps, after sorting by descending score. `maxResultItems` bounds it further."
+        },
+        "scoreThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0,
+          "description": "The lowest score a class needs to appear in the output."
+        },
+        "outputName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The output tensor holding the scores. Omit it on a single-output model."
+        }
       }
     },
     "detectionParams": {
       "title": "Detection parameters",
+      "description": "`decode` selects how the head is read. `yoloxGrid` reads an anchor-free grid and needs `strides`; `decodedBoxes` reads a head that already emits boxes, scores, and classes.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "decoder": {
-          "enum": ["raw", "yolox", "ssd", "anchorBoxes"],
-          "default": "raw",
-          "description": "How raw outputs become boxes. `raw`: the graph already emits final boxes and scores. `yolox`: anchor-free grid decoding using `strides`. `ssd`: separate box, score, and class tensors named by `outputNames`. `anchorBoxes`: grid decoding against the `anchors` list."
+        "labels": { "$ref": "#/$defs/labelSet" },
+        "numClasses": { "$ref": "#/$defs/numClasses" },
+        "decode": {
+          "enum": ["yoloxGrid", "decodedBoxes"],
+          "default": "yoloxGrid",
+          "description": "How the raw outputs become boxes."
         },
-        "boxFormat": { "enum": ["xyxy", "xywh", "cxcywh"], "default": "xyxy", "description": "How the decoded box coordinates are laid out before normalization." },
-        "boxesNormalized": { "type": "boolean", "default": false, "description": "Whether decoded coordinates are already in `[0, 1]`. When `false` they are divided by the model input size and un-letterboxed." },
-        "strides": { "type": "array", "maxItems": 8, "items": { "type": "integer", "minimum": 1 }, "description": "The feature-map strides of a grid decoder.", "examples": [[8, 16, 32]] },
-        "anchors": {
+        "scoreThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.25,
+          "description": "The lowest score a detection needs to survive filtering."
+        },
+        "iouThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.45,
+          "description": "The intersection over union above which suppression drops the weaker box of the same class."
+        },
+        "maxDetections": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "How many detections survive suppression. It defaults to `maxResultItems`."
+        },
+        "strides": {
           "type": "array",
-          "maxItems": 64,
-          "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0 } },
-          "description": "The anchor box sizes as `[width, height]` pairs in model input pixels."
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "The feature-map strides of the grid, smallest first. `yoloxGrid` requires it.",
+          "examples": [[8, 16, 32]]
         },
-        "numClasses": { "type": "integer", "minimum": 1, "description": "How many classes the head predicts." },
-        "scoreThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.25, "description": "The lowest score a detection needs to survive filtering." },
-        "iouThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.45, "description": "The intersection over union above which non-maximum suppression drops the weaker box." },
-        "classAgnosticNms": { "type": "boolean", "default": false, "description": "Whether suppression compares boxes across classes instead of within each class." },
-        "maxDetections": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100, "description": "How many detections survive suppression." },
-        "labelsFile": { "$ref": "#/$defs/bundlePath", "default": "labels.json", "description": "The bundle file that maps class indexes to labels." },
+        "objectness": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the grid head emits an objectness column before the class scores. The reported score is objectness times class score."
+        },
+        "scoreActivation": {
+          "enum": ["none", "sigmoid", "softmax"],
+          "default": "none",
+          "description": "The activation applied to the class scores."
+        },
+        "objectnessActivation": {
+          "enum": ["none", "sigmoid"],
+          "default": "none",
+          "description": "The activation applied to the objectness column."
+        },
+        "outputName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The output tensor holding the grid. Omit it on a single-output model."
+        },
         "outputNames": {
           "title": "Output roles",
-          "description": "Which output tensor plays which role, for heads that emit more than one.",
+          "description": "Which output tensor plays which role on a `decodedBoxes` head.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "predictions": { "type": "string", "minLength": 1, "maxLength": 256, "description": "A single fused prediction tensor." },
             "boxes": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The box tensor." },
             "scores": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The score tensor." },
-            "classes": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The class index tensor." }
+            "classes": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The class index tensor." },
+            "count": { "type": "string", "minLength": 1, "maxLength": 256, "description": "A tensor naming how many of the fixed-size rows are real." }
           }
+        },
+        "scoresLayout": {
+          "enum": ["perBox", "perClass"],
+          "default": "perBox",
+          "description": "Whether the score tensor carries one score per box, or a full class vector per box."
+        },
+        "boxFormat": {
+          "enum": ["xyxy", "yxyx", "cxcywh"],
+          "default": "xyxy",
+          "description": "How the decoded box coordinates are laid out."
+        },
+        "boxCoordinates": {
+          "enum": ["normalized", "pixels"],
+          "default": "normalized",
+          "description": "Whether decoded coordinates are already in `[0, 1]`. `pixels` divides them by the model input size before un-letterboxing."
+        },
+        "classIndexOffset": {
+          "type": "integer",
+          "default": 0,
+          "description": "Subtracted from every class index the head reports, for a head that reserves index zero for background."
+        },
+        "applyNms": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to suppress overlapping boxes. Set it to `false` for a head that already suppressed them."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "decode": { "const": "yoloxGrid" } },
+            "required": ["decode"]
+          },
+          "then": { "required": ["strides"] }
+        }
+      ]
     },
     "segmentationParams": {
       "title": "Segmentation parameters",
+      "description": "`argmax` gives every label an entry, including the ones with no pixels, so a rule such as 'no defect pixels' evaluates on a clean image. `threshold` reports the single class named by `positiveLabel`.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "numClasses": { "type": "integer", "minimum": 1, "description": "How many classes the head predicts." },
-        "activation": { "enum": ["softmax", "sigmoid", "none"], "default": "softmax", "description": "The activation applied across the class axis. `sigmoid` treats each class independently." },
-        "threshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5, "description": "The per-pixel score at which a class claims a pixel, used with `sigmoid` activation." },
-        "ignoreIndex": { "type": ["integer", "null"], "default": null, "description": "A class index excluded from the summary, usually the background." },
-        "minRegionPixels": { "type": "integer", "minimum": 0, "default": 0, "description": "The smallest region reported, in source pixels. It suppresses single-pixel speckle." },
-        "labelsFile": { "$ref": "#/$defs/bundlePath", "default": "labels.json", "description": "The bundle file that maps class indexes to labels." },
-        "outputName": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the class map. Omit it on a single-output model." }
+        "labels": { "$ref": "#/$defs/labelSet" },
+        "numClasses": { "$ref": "#/$defs/numClasses" },
+        "mode": {
+          "enum": ["argmax", "threshold"],
+          "default": "argmax",
+          "description": "How the class map is read. `argmax` takes the highest-scoring class per pixel; `threshold` takes every pixel over `threshold` for one class."
+        },
+        "outputLayout": {
+          "enum": ["NCHW", "NHWC"],
+          "default": "NCHW",
+          "description": "The axis order of the output class map."
+        },
+        "activation": {
+          "enum": ["none", "sigmoid", "softmax"],
+          "default": "none",
+          "description": "The activation applied across the class axis before the map is read."
+        },
+        "threshold": {
+          "type": "number",
+          "default": 0.5,
+          "description": "The per-pixel score at which a pixel joins the class, in `threshold` mode."
+        },
+        "positiveLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The label the `threshold` mode reports. It defaults to the last label."
+        },
+        "minPixels": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0,
+          "description": "The smallest region reported, in class-map pixels. It suppresses single-pixel speckle."
+        },
+        "ignoreIndex": {
+          "type": ["integer", "null"],
+          "default": null,
+          "description": "A class index excluded from the summary, usually the background."
+        },
+        "outputName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The output tensor holding the class map. Omit it on a single-output model."
+        }
       }
     },
     "anomalyParams": {
       "title": "Anomaly parameters",
+      "description": "An anomaly head scores the whole image, so it names no classes.",
       "type": "object",
       "additionalProperties": false,
+      "required": ["threshold"],
       "properties": {
-        "threshold": { "type": "number", "description": "The score at which the image counts as anomalous. It is republished on every result." },
-        "higherIsAnomalous": { "type": "boolean", "default": true, "description": "Whether a higher score means more anomalous. Set it to `false` for a similarity score." },
-        "scoreOutput": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the image-level score." },
-        "heatmapOutput": { "type": "string", "minLength": 1, "maxLength": 256, "description": "The output tensor holding the per-pixel anomaly map. The map is summarized and never published." },
-        "maxRegions": { "type": "integer", "minimum": 0, "maximum": 100, "default": 10, "description": "How many heatmap regions the summary reports." },
-        "regionThreshold": { "type": "number", "description": "The per-pixel score at which a heatmap pixel joins a region. It defaults to `threshold`." }
+        "source": {
+          "enum": ["scalar", "mapMax", "mapMean"],
+          "default": "scalar",
+          "description": "Where the image-level score comes from. `scalar`: the head emits it directly. `mapMax` and `mapMean`: reduce the per-pixel anomaly map, which also produces the heatmap summary."
+        },
+        "threshold": {
+          "type": "number",
+          "description": "The score at which the image counts as anomalous, in the same units as the reported score. It is republished on every result."
+        },
+        "activation": {
+          "enum": ["none", "sigmoid"],
+          "default": "none",
+          "description": "The activation applied to the raw score."
+        },
+        "direction": {
+          "enum": ["higherIsAnomalous", "lowerIsAnomalous"],
+          "default": "higherIsAnomalous",
+          "description": "Which end of the range is anomalous. A similarity head sets `lowerIsAnomalous`."
+        },
+        "normalization": {
+          "title": "Score normalization",
+          "description": "Maps the raw score onto `[0, 1]` so a threshold reads the same across models.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "number", "default": 0, "description": "The raw score that maps to `0`." },
+            "max": { "type": "number", "default": 1, "description": "The raw score that maps to `1`." }
+          }
+        },
+        "outputName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The output tensor holding the score or the map. Omit it on a single-output model."
+        }
       }
     },
     "executionProvider": {

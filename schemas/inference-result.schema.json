@@ -209,9 +209,7 @@
         },
         "confidence": {
           "type": ["number", "null"],
-          "minimum": 0,
-          "maximum": 1,
-          "description": "The confidence the rules extracted from the normalized output, or `null` when the rule produced no number."
+          "description": "In whatever units the confidence path reports. The confidence the rules extracted from the normalized output, or `null` when the rule produced no number."
         },
         "threshold": {
           "type": ["number", "null"],
@@ -326,7 +324,7 @@
       "properties": {
         "label": { "type": "string", "maxLength": 256, "description": "The class label from the bundle's label file." },
         "index": { "type": "integer", "minimum": 0, "description": "The class index in the model's output vector." },
-        "score": { "type": "number", "minimum": 0, "maximum": 1, "description": "The class score after the family's activation." }
+        "score": { "type": "number", "description": "Softmax and sigmoid put it in the unit range; none reports the raw value. The class score after the family's activation." }
       }
     },
     "detection": {
@@ -336,73 +334,95 @@
       "properties": {
         "label": { "type": "string", "maxLength": 256, "description": "The class label from the bundle's label file." },
         "index": { "type": "integer", "minimum": 0, "description": "The class index in the model's output vector." },
-        "score": { "type": "number", "minimum": 0, "maximum": 1, "description": "The detection score after non-maximum suppression." },
+        "score": { "type": "number", "description": "Objectness times class score for a grid head, the head confidence for a decoded head, after suppression." },
         "box": { "$ref": "#/$defs/box" }
       }
     },
     "box": {
       "title": "Normalized box",
-      "description": "A box in the source image's coordinate space, normalized to `[0, 1]`, so a consumer needs no knowledge of the model's input resolution.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["x", "y", "w", "h"],
-      "properties": {
-        "x": { "type": "number", "description": "Left edge." },
-        "y": { "type": "number", "description": "Top edge." },
-        "w": { "type": "number", "minimum": 0, "description": "Width." },
-        "h": { "type": "number", "minimum": 0, "description": "Height." }
-      }
+      "description": "A region as `[x, y, w, h]` in the source image, normalized to `[0, 1]` with the origin at the top left, so a consumer needs no knowledge of the model input resolution to draw it. A box decoded on a letterboxed canvas is reported against the picture the camera took, and clipped to it.",
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "type": "number" }
     },
     "segment": {
+      "title": "One class of a segmentation map",
+      "description": "In `argmax` mode every label gets an entry, including the ones with no pixels, so a rule such as \"no defect pixels\" evaluates on a clean image instead of failing to resolve its path.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["pixels"],
+      "required": ["pixels", "fraction"],
       "properties": {
-        "pixels": { "type": "integer", "minimum": 0, "description": "How many source pixels the class covers." },
+        "pixels": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many pixels of the class map the class claims."
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "That count divided by the size of the class map, so a rule can be written against the image rather than against a resolution."
+        },
         "bbox": {
-          "type": "array",
+          "type": ["array", "null"],
           "minItems": 4,
           "maxItems": 4,
           "items": { "type": "number" },
-          "description": "The bounding region of the class as `[x, y, w, h]`, normalized to `[0, 1]`."
+          "description": "The region those pixels occupy as `[x, y, w, h]`, normalized to the source image, or `null` when the class claims none."
         }
       }
     },
     "anomaly": {
+      "title": "Anomaly score",
+      "description": "One image-level score against one threshold, plus a bounded summary of the heatmap when the head produced one. The map itself stays in the executor cell.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["score"],
+      "required": ["score", "threshold", "anomalous", "direction"],
       "properties": {
-        "score": { "type": "number", "description": "The model's anomaly score for the image." },
-        "threshold": { "type": "number", "description": "The threshold the score is compared against, from the bundle manifest." },
+        "score": {
+          "type": "number",
+          "description": "The activated, normalized score. It lies in `[0, 1]` when the manifest declares a `normalization`."
+        },
+        "threshold": {
+          "type": "number",
+          "description": "The manifest threshold, in the same units as `score`."
+        },
+        "anomalous": {
+          "type": "boolean",
+          "description": "Whether the score crossed the threshold in the direction `direction` names."
+        },
+        "direction": {
+          "enum": ["higherIsAnomalous", "lowerIsAnomalous"],
+          "description": "Which end of the range is anomalous. A similarity head reports `lowerIsAnomalous`."
+        },
         "summary": {
           "title": "Heatmap summary",
-          "description": "A bounded summary of the anomaly heatmap. The heatmap itself is never published.",
+          "description": "Present for a map head only.",
           "type": "object",
           "additionalProperties": false,
+          "required": ["min", "max", "mean", "aboveThresholdPixels", "fraction"],
           "properties": {
-            "maxScore": { "type": "number", "description": "The highest per-pixel score." },
-            "meanScore": { "type": "number", "description": "The mean per-pixel score." },
-            "regions": {
-              "type": "array",
-              "maxItems": 100,
-              "description": "The strongest contiguous regions, ordered by descending score.",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["bbox", "score"],
-                "properties": {
-                  "bbox": {
-                    "type": "array",
-                    "minItems": 4,
-                    "maxItems": 4,
-                    "items": { "type": "number" },
-                    "description": "The region as `[x, y, w, h]`, normalized to `[0, 1]`."
-                  },
-                  "score": { "type": "number", "description": "The region's peak score." },
-                  "pixels": { "type": "integer", "minimum": 0, "description": "How many source pixels the region covers." }
-                }
-              }
+            "min": { "type": "number", "description": "The lowest per-pixel score." },
+            "max": { "type": "number", "description": "The highest per-pixel score." },
+            "mean": { "type": "number", "description": "The mean per-pixel score." },
+            "aboveThresholdPixels": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many pixels crossed the threshold."
+            },
+            "fraction": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "That count divided by the size of the map."
+            },
+            "bbox": {
+              "type": ["array", "null"],
+              "minItems": 4,
+              "maxItems": 4,
+              "items": { "type": "number" },
+              "description": "The region the crossing pixels occupy as `[x, y, w, h]`, normalized to the source image, or `null` when none crossed."
             }
           }
         }
