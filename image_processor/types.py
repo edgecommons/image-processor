@@ -82,6 +82,74 @@ class CompletionAction(str, Enum):
 
 
 @dataclass(frozen=True)
+class SecretRef:
+    """An unresolved ``$secret`` reference from configuration.
+
+    The core resolves ``$secret`` automatically only under ``streaming``, so this component
+    carries its own references as values and resolves them through ``gg.get_credentials()`` at
+    the moment they are used (DESIGN.md §9). Parsing never resolves one: a parsed configuration
+    can be logged, published, or compared without touching the vault.
+
+    Attributes:
+        name: The secret's name in the vault.
+        field: One field of the secret's JSON document, or ``None`` for the whole string value.
+    """
+
+    name: str
+    field: Optional[str] = None
+
+    @staticmethod
+    def is_ref(value: object) -> bool:
+        """Report whether a parsed JSON value is a ``$secret`` reference.
+
+        Args:
+            value: Any parsed JSON value.
+
+        Returns:
+            ``True`` when the value is an object carrying a string ``$secret`` key.
+        """
+        return isinstance(value, dict) and isinstance(value.get("$secret"), str)
+
+    @staticmethod
+    def parse(value: object) -> "SecretRef":
+        """Build a reference from its configuration form.
+
+        Args:
+            value: An object of the form ``{"$secret": "name"}``, optionally with ``field``.
+
+        Returns:
+            The unresolved reference.
+
+        Raises:
+            ValueError: If the value is not a well-formed ``$secret`` reference.
+        """
+        if not SecretRef.is_ref(value):
+            raise ValueError("a $secret reference must be an object with a string '$secret' key")
+        assert isinstance(value, dict)
+        name = value["$secret"]
+        if not name:
+            raise ValueError("a $secret reference must name a non-empty secret")
+        extra = sorted(set(value) - {"$secret", "field"})
+        if extra:
+            raise ValueError(f"a $secret reference has unknown keys: {', '.join(extra)}")
+        field_name = value.get("field")
+        if field_name is not None and (not isinstance(field_name, str) or not field_name):
+            raise ValueError("a $secret reference's 'field' must be a non-empty string")
+        return SecretRef(name=name, field=field_name)
+
+    def to_config(self) -> dict:
+        """Render the reference back into its configuration form.
+
+        Returns:
+            The ``{"$secret": ...}`` object this reference was parsed from.
+        """
+        out = {"$secret": self.name}
+        if self.field is not None:
+            out["field"] = self.field
+        return out
+
+
+@dataclass(frozen=True)
 class ModelRef:
     """An immutable model identity. ``digest`` is ``sha256:<hex>`` of the bundle tarball."""
 

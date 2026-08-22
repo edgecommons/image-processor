@@ -6,7 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "image-processor"
 version = "0.1.0"
 description = "Image inference processor: loads image-model bundles (ONNX Runtime, NVIDIA GPU), runs inference on finalized image files or subscription-triggered images, and publishes versioned inference results with evidence."
-requires-python = ">=3.9"
+# WP1: DESIGN.md section 1 pins the runtime to Python 3.12 and up; the scaffold default said 3.9.
+requires-python = ">=3.12"
 dependencies = [
     # The edgecommons Python library, in the same form as requirements.txt (the CLI substitutes
     # the `--dep-source` you chose: a pinned git requirement for `registry`/`pinned-rev`, a
@@ -15,13 +16,19 @@ dependencies = [
     # with `edgecommons component upgrade`.
     "edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python",
     # TODO: add your component's own runtime dependencies here.
+    # WP1: the component validates its own config.schema.json and the shipped wire/bundle
+    # schemas at runtime, so jsonschema is a first-class runtime dependency here rather
+    # than something inherited from the core library.
+    "jsonschema>=4.18",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=7", "pytest-cov"]
 
-[tool.setuptools]
-packages = ["image_processor"]
+# WP1: discover every subpackage rather than listing them. `image_processor/config` ships in
+# the wheel, and so do the packages the later work packages add, without another edit here.
+[tool.setuptools.packages.find]
+include = ["image_processor*"]
 
 [tool.pytest.ini_options]
 # The package resolves from the repo root without an install (the CI/scaffold-build gate runs
