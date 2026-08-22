@@ -155,6 +155,26 @@
         }
       }
     },
+    "discovery": {
+      "title": "Spool discovery cadence",
+      "description": "How a spool route finds work. Filesystem state is authoritative: OS notifications only nudge a walk, and the periodic walk runs whether or not a notification ever arrives, so a missed event delays a job rather than losing it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rescanSecs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 60,
+          "description": "How often a route walks its root with no notification at all. This is the interval within which a file whose event was dropped is still found."
+        },
+        "debounceMs": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 500,
+          "description": "How long notifications must stop before a nudged walk runs. A camera writing a burst of files produces one walk rather than one per file; `0` walks on every nudge."
+        }
+      }
+    },
     "publish": {
       "title": "Confirmed publication of the inference result",
       "description": "The result on `app/inference/result` is the only cleanup-gating output. It is prepared once, stored byte for byte in the ledger, and published with positive transport confirmation.",
@@ -182,7 +202,13 @@
           "type": "integer",
           "minimum": 1,
           "default": 100000,
-          "description": "How many rows the outbox holds. Admission reserves capacity for the largest result a route can produce, so a finished job is never stranded by a full outbox; when the reserve cannot be met the component stops claiming new work and reports the pressure."
+          "description": "How many rows the outbox holds. This bounds the count of pending publications; `outboxReserveBudgetMiB` bounds their size."
+        },
+        "outboxReserveBudgetMiB": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 256,
+          "description": "How much outbox and evidence capacity admission may hold in total. A job is admitted only after it reserves room for the largest result its route can produce, so a finished job is never stranded by a full outbox; when the reserve cannot be met the component stops claiming new work and reports the pressure."
         }
       }
     },
@@ -576,8 +602,8 @@
     },
     "collisionPolicy": {
       "title": "Collision policy",
-      "enum": ["fail"],
-      "description": "What happens when a completion action's target path already holds a different object. `fail` records `CLEANUP_FAILED` and leaves both files intact, so the job waits for `retry-cleanup` or an operator. Evidence is never overwritten, which is why this is the only policy."
+      "enum": ["fail", "suffix"],
+      "description": "What happens when a completion action's target path already holds a different object. `fail` records `CLEANUP_FAILED` and leaves both files intact, so the job waits for `retry-cleanup` or an operator. `suffix` installs the input beside the occupant under a deterministic name derived from its own digest, so the move completes and the name is reproducible from the ledger. Neither policy overwrites the object already there: evidence is never replaced."
     },
     "trustedKey": {
       "title": "One trusted signing key",

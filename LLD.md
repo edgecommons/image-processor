@@ -222,77 +222,147 @@ them is `engine/decision.py`'s job (WP4a), which owns the `jsonpath-ng` dependen
 ## 4. `bundles/` (WP2)
 
 ```python
-# archive.py
+# archive.py  (BundleError is defined here, the lowest layer; the package re-exports it)
+class BundleError(Exception): code: str; message: str        # SCREAMING_SNAKE codes, e.g. DIGEST_MISMATCH
 @dataclass(frozen=True) class ExtractLimits: max_members: int = 10_000; max_total_bytes: int = 8 * 2**30; max_member_bytes: int = 4 * 2**30; max_ratio: float = 100.0
+def normalize_digest(digest: str) -> str ; def digest_hex(digest: str) -> str   # accept "sha256:<hex>" or bare hex
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str
 def verify_tarball_digest(path: Path, expected: str) -> None          # raises BundleError("DIGEST_MISMATCH")
-def extract_tarball(path: Path, dest: Path, limits: ExtractLimits) -> list[Path]
-    # rejects absolute paths, "..", symlinks/hardlinks/devices, members outside dest; streams with ratio guard
+def extract_tarball(path: Path, dest: Path, limits: ExtractLimits = ExtractLimits()) -> list[Path]
+    # rejects absolute paths, "..", backslashes, symlinks/hardlinks/devices, duplicates, members outside dest,
+    # and members colliding with an earlier one; streams with member/total/per-member/ratio guards; tar and tar.gz by magic
+def read_member_bytes(path: Path, names: Iterable[str], limits: ExtractLimits = ExtractLimits(), max_bytes: int = 4 << 20) -> Mapping[str, bytes]
+    # manifest.json and manifest.sig are read under the same rules before extraction, so the signature gates the payload (DESIGN.md §9 step 3)
 # manifest.py
-def load_manifest(bundle_dir: Path) -> BundleManifest                  # validates against schemas/model-bundle-manifest.schema.json, then per-file digests
+DEFAULT_SCHEMA_PATH = <repo>/schemas/model-bundle-manifest.schema.json          # the WP1 contract
+def load_manifest(bundle_dir: Path, schema_path: Path | None = None, verify_files: bool = True) -> BundleManifest
+    # manifest.json at the root -> schema -> per-file digests; a file the manifest does not declare is refused (FILE_UNDECLARED)
+def parse_manifest(document: dict) -> BundleManifest ; def validate_document(document: dict, schema_path: Path | None = None) -> None
+def read_manifest_bytes(bundle_dir: Path) -> bytes ; def resolve_model_path(bundle_dir: Path, m: BundleManifest) -> Path
 # signature.py
-def verify_manifest_signature(manifest_bytes: bytes, signature: bytes, public_key_pem_or_raw: bytes) -> None   # Ed25519 via cryptography; raises BundleError("BAD_SIGNATURE")
-def sign_manifest(manifest_bytes: bytes, private_key: bytes) -> bytes                                           # used by tools/make_bundle.py and tests
+def verify_manifest_signature(manifest_bytes: bytes, signature: bytes, public_key_pem_or_raw: bytes) -> None
+    # Ed25519 via cryptography; PEM, DER, or raw 32 bytes, as bytes or text; raises BundleError("BAD_SIGNATURE")
+def sign_manifest(manifest_bytes: bytes, private_key: bytes) -> bytes           # used by tools/make_bundle.py and tests
+def generate_keypair(password: bytes | None = None) -> tuple[bytes, bytes, bytes]   # private PEM, public PEM, raw public key
+def load_public_key / load_private_key / public_key_pem / public_key_raw / private_key_pem
 # cache.py
 class BundleCache:
-    def __init__(self, root: Path): ...                                # <root>/<sha256hex>/{manifest.json, model.onnx, ...} + <root>/<sha256hex>.json metadata
-    def get(self, digest: str) -> CachedBundle | None
-    def promote(self, extracted_dir: Path, digest: str) -> CachedBundle   # atomic rename into place; idempotent
-    def list(self) -> list[CachedBundle]
-    def gc(self, pinned: set[str]) -> list[str]                        # removes unpinned digests
+    def __init__(self, root: Path, schema_path: Path | None = None): ...   # <root>/<sha256hex>/{manifest.json, model.onnx, ...} + <root>/<sha256hex>.json metadata
+    def get(self, digest: str, verify: bool = False) -> CachedBundle | None    # None when absent or half-promoted; raises when a cached bundle no longer verifies
+    def promote(self, extracted_dir: Path, digest: str) -> CachedBundle        # rename into place (copy first across filesystems); idempotent: an existing copy is verified and kept, one that fails is replaced
+    def list(self) -> list[CachedBundle] ; def metadata(self, digest: str) -> dict | None
+    def gc(self, pinned: Iterable[str]) -> list[str]                       # removes unpinned digests, orphan metadata, and stale staging temporaries
 # fetch.py
 class Fetcher(Protocol): def fetch(self, uri: str, dest: Path, credentials: dict | None) -> Path
-def fetcher_for(uri: str) -> Fetcher          # file:// or plain path, https://, s3:// (boto3 optional extra; ImportError -> BundleError("S3_UNAVAILABLE"))
-def stage_bundle(entry: ModelEntry, staging_root: Path, cache: BundleCache, signing: SigningConfig, credentials: dict | None) -> CachedBundle
-    # DESIGN.md §9 steps 2–6 except warmup (warmup is the engine's job, called by the artifact manager in WP6)
+def check_https_uri(uri: str, allowed_prefixes: Sequence[str] | None) -> str   # https only, no credentials in the URL, prefix allow-list over the normalized URL (None = no allow-list configured)
+def fetcher_for(uri: str, allowed_prefixes: Sequence[str] | None = None, timeout_secs: float = 60.0, max_bytes: int | None = None, ssl_context: ssl.SSLContext | None = None) -> Fetcher
+    # plain path or file://, https:// (TLS verified, the policy re-applied to every redirect), s3:// (boto3 optional extra; ImportError -> BundleError("S3_UNAVAILABLE"))
+def stage_bundle(uri: str, digest: str, staging_root: Path, cache: BundleCache, credentials: Mapping | None = None,
+                 signing_required: bool = False, trusted_keys: Mapping[str, bytes] | None = None,
+                 limits: ExtractLimits = ExtractLimits(), schema_path: Path | None = None,
+                 allowed_prefixes: Sequence[str] | None = None, model_id: str | None = None, version: str | None = None,
+                 available_providers: Sequence[str] | None = None, validators: Sequence[Callable[[BundleManifest], None]] = (),
+                 timeout_secs: float = 60.0, max_bytes: int | None = None, ssl_context: ssl.SSLContext | None = None) -> CachedBundle
+    # DESIGN.md §9 steps 2-6 except warmup: unique staging dir -> fetch -> tarball digest -> signature over manifest.json ->
+    # bounded extract -> schema + per-file digests -> identity, provider, and injected validators -> cache.promote
 ```
 
-`tools/make_bundle.py`: `make-bundle <dir> --out <file.tar.gz> --key <ed25519-private.pem>
-[--key-id <id>]` computes per-file digests into `manifest.json` (merging an author-supplied
-`manifest.json`), writes `manifest.sig`, packs, prints the tarball digest. `--gen-key <path>`
-creates an Ed25519 keypair.
+`stage_bundle` takes plain arguments rather than `ModelEntry`/`SigningConfig` so that `bundles/`
+does not depend on `config/`; WP6 adapts one onto the other when it wires the artifact manager.
+Provider compatibility is checked here when `available_providers` is given; task-family support
+(DESIGN.md §9 step 4) reaches it as a `validators` entry, because the families live in
+`engine/` (WP4a). A signature is verified whenever it is present and its `keyId` is trusted, and
+`signing_required` additionally makes the signature and a trusted key mandatory.
+
+`tools/make_bundle.py`: `python tools/make_bundle.py <dir> --out <file.tar[.gz]> [--key
+<ed25519-private.pem>] [--key-id <id>] [--key-password <pass>] [--gzip] [--schema <path>]`
+computes per-file digests into `manifest.json` (merging an author-supplied `manifest.json`),
+validates it, writes `manifest.sig`, packs the archive with fixed member metadata so the digest
+is reproducible, and prints the tarball digest. `--gen-key <path>` creates an Ed25519 keypair:
+the private PEM, `<path>.pub.pem`, and the raw 32-byte `<path>.pub`. Importable functions
+(`make_bundle`, `build_manifest_document`, `collect_files`, `generate_key_files`, `main`) back
+the CLI so tests and WP7 call it directly.
 
 ## 5. `ledger/` and `completion/` (WP3)
 
 ```python
 class Ledger:
-    def __init__(self, path: Path, synchronous: str = "FULL"): ...     # WAL; one writer thread + queue; reads on a separate connection
-    def close(self) -> None
+    def __init__(self, path: Path, synchronous: str = "FULL", busy_timeout_ms: int = 5000,
+                 reserve_budget_bytes: int = 256 * 2**20, clock=_now_ms): ...
+        # WAL; one writer thread + queue; reads on a separate connection; foreign_keys ON
+    def close(self) -> None                                            # also a context manager
     # jobs
     def admit(self, job: Job, reserve_bytes: int) -> bool              # False when already present (same inference_id) or capacity reserve fails
+    def reserved_bytes(self) -> int
     def get(self, inference_id: str) -> Job | None
-    def transition(self, inference_id: str, expected: JobState, new: JobState, **fields) -> Job   # raises LedgerConflict if state != expected
+    def last_error(self, inference_id: str) -> str | None
+    def transition(self, inference_id: str, expected: JobState, new: JobState, **fields) -> Job
+        # raises LedgerConflict if state != expected, IllegalTransition if the edge is not in TRANSITIONS;
+        # **fields is limited to attempts, next_attempt_at_ms, staged_path, config_generation, last_error;
+        # a self-edge (new == expected) is allowed so a field-only update reuses the same gate
     def claimable(self, route_id: str | None, limit: int) -> list[Job]
     def by_state(self, states: Iterable[JobState], route_id: str | None = None, cursor: str | None = None, limit: int = 100) -> tuple[list[Job], str | None]
     # results + outbox (one transaction)
     def commit_result(self, inference_id: str, result_json: bytes, sidecar: tuple[str, str] | None, outbox: list[OutboxRow]) -> None
-    def pending_outbox(self, limit: int) -> list[OutboxRow]            # OutboxRow(id, inference_id, topic, encoded_bytes, attempts, gating: bool)
+        # INFERENCING -> RESULT_COMMITTED -> PUBLISH_PENDING (the second edge only when outbox rows exist)
+    def result_bytes(self, inference_id: str) -> bytes | None
+    def outbox_for(self, inference_id: str) -> list[OutboxRow]
+    def pending_outbox(self, limit: int) -> list[OutboxRow]            # OutboxRow(id, inference_id, topic, encoded_bytes, attempts, gating: bool, last_error); eligible only while the job is PUBLISH_PENDING
     def mark_published(self, outbox_id: int) -> None                   # when every gating row for the job is published -> job PUBLISHED
     def mark_publish_attempt(self, outbox_id: int, error: str) -> None
+    def exhaust_publish(self, inference_id: str) -> Job                # PUBLISH_PENDING -> PUBLISH_EXHAUSTED
+    def retry_publication(self, inference_id: str) -> Job              # PUBLISH_EXHAUSTED -> PUBLISH_PENDING; clears unpublished row attempts
     # cleanup
-    def record_cleanup_intent(self, intent: CleanupIntent) -> None
-    def complete_cleanup(self, inference_id: str, observed: str) -> None
-    def pending_cleanup(self, limit: int) -> list[CleanupIntent]
+    def record_cleanup_intent(self, intent: CleanupIntent) -> Job      # PUBLISHED|CLEANUP_FAILED -> CLEANUP_PENDING; INPUT_INVALID and PROCESSING_EXHAUSTED keep their state
+    def cleanup_intent(self, inference_id: str) -> CleanupIntent | None
+    def cleanup_observed(self, inference_id: str) -> str | None
+    def complete_cleanup(self, inference_id: str, observed: str) -> Job  # CLEANUP_PENDING -> COMPLETED, INPUT_INVALID -> QUARANTINED, PROCESSING_EXHAUSTED -> RETAINED_FAILED
+    def fail_cleanup(self, inference_id: str, error: str) -> Job       # CLEANUP_PENDING -> CLEANUP_FAILED; otherwise the state is kept with the error, never success
+    def pending_cleanup(self, limit: int) -> list[CleanupIntent]       # intents with no observed outcome
     # model generations
     def set_route_generation(self, route_id: str, desired: str, active: str | None) -> None
     def route_generation(self, route_id: str) -> tuple[str | None, str | None]
+    # key/value (WP5 reconciliation watermarks)
+    def kv_get(self, key: str) -> str | None
+    def kv_set(self, key: str, value: str | None) -> None
     # recovery
-    def recover(self) -> RecoveryReport                                # INFERENCING -> READY (same attempt), PUBLISH_PENDING retained, CLEANUP_PENDING -> reconcile list
+    def recover(self) -> RecoveryReport                                # INFERENCING -> READY (same attempt), CLAIMED/WAITING_MODEL -> READY, due RETRY_WAIT -> READY, PUBLISH_PENDING retained, CLEANUP_PENDING -> reconcile list
+    def requeue_for_reinference(self, inference_id: str, reason: str) -> Job
+        # DESIGN.md §7: a committed record whose sidecar is absent returns to re-inference;
+        # drops the result bytes, the result digest, the sidecar binding, and the outbox rows
 # completion/actions.py
 class Completer:
-    def __init__(self, ledger: Ledger, fs: FsOps = RealFs()): ...
+    def __init__(self, ledger: Ledger, fs: FsOps = RealFs(), on_collision: str = "fail", clock=_now_ms): ...
     def plan(self, job: Job, policy: CompletionPolicy, members: list[Path]) -> CleanupIntent
-    def apply(self, intent: CleanupIntent) -> None                     # intent persisted first; temp+rename; cross-fs copy+verify+remove; collision -> CLEANUP_FAILED
-    def reconcile(self, intent: CleanupIntent) -> JobState             # DESIGN.md §7 observed-state rules
+    def apply(self, intent: CleanupIntent, on_collision: str | None = None) -> None    # intent persisted first; temp+rename; cross-fs copy+verify+remove; collision -> CLEANUP_FAILED
+    def reconcile(self, intent: CleanupIntent, on_collision: str | None = None) -> JobState   # DESIGN.md §7 observed-state rules
 ```
 
+`TRANSITIONS` (`ledger/schema.py`) is the DESIGN.md §7 state diagram, edge for edge, and is the
+only place an edge is legal; `transition()` refuses anything else with `IllegalTransition`.
+`RECOVERY_EDGES` (`ledger/recovery.py`) is the separate, smaller table a restart uses, because
+recovery moves a job backwards along edges the forward lifecycle never takes: `INFERENCING`,
+`CLAIMED`, `WAITING_MODEL`, and a due `RETRY_WAIT` to `READY`, plus `RESULT_COMMITTED` and
+`PUBLISH_PENDING` to `READY` for `requeue_for_reinference`. `RecoveryReport` carries the count per
+edge, the open cleanup intents, the inference ids still eligible for the publisher, and the
+sidecar bindings of committed-but-uncleaned jobs so the caller can run the DESIGN.md §7 filesystem
+reconciliation.
+
+`CompletionPolicy` is a structural `Protocol` in `completion/actions.py` carrying `source_root`,
+`archive_dir`, `failed_dir`, `on_success`, `on_invalid_input`, `on_operational_failure`,
+`on_publish_failure`, and `on_collision`; WP1's `config.models.CompletionPolicy` dataclass
+satisfies it. `source_root` is the route's `source.root`, which completion needs to resolve an
+input's absolute path from `Job.source.relative_path`. Action values accept both the durable enum
+and the config spellings, including `retainInPlace`.
+
 Schema (`ledger/schema.py`): `jobs(inference_id PK, route_id, state, source_json, model_json,
-attempts, next_attempt_at_ms, staged_path, config_generation, result_sha256, sidecar_path,
-sidecar_sha256, created_at_ms, updated_at_ms)`, `outbox(id PK, inference_id, topic, payload BLOB,
-gating, attempts, last_error, published_at_ms)`, `cleanup_intents(inference_id PK, action,
-source_path, source_sha256, target_path, members_json, observed, created_at_ms)`,
-`route_generations(route_id PK, desired, active, updated_at_ms)`, `reservations(inference_id PK,
-bytes)`. Migrations: `CREATE TABLE IF NOT EXISTS` + a `meta(schema_version)` row.
+transform_version, attempts, next_attempt_at_ms, staged_path, config_generation, result_json,
+result_sha256, sidecar_path, sidecar_sha256, last_error, created_at_ms, updated_at_ms)`,
+`outbox(id PK, inference_id, topic, payload BLOB, gating, attempts, last_error, published_at_ms)`,
+`cleanup_intents(inference_id PK, action, source_path, source_sha256, target_path, members_json,
+observed, created_at_ms)`, `route_generations(route_id PK, desired, active, updated_at_ms)`,
+`reservations(inference_id PK, bytes)`, `kv(key PK, value)`. Migrations:
+`CREATE TABLE IF NOT EXISTS` + a `meta(schema_version)` row.
 
 ## 6. `engine/` (WP4a: decode, families, decision; WP4b: protocol, cell, supervisor, scheduler, residency)
 
@@ -340,25 +410,101 @@ eviction, priority + age weighting, single-flight load, no micro-batching (Phase
 ## 7. `sources/` (WP5)
 
 ```python
+# __init__.py    the events protocol + the configuration shapes the sources read
 class SourceEvents(Protocol):             # what a source reports to the app (WP6 implements)
     def discovered(self, route_id: str, source: SourceIdentity, staged_path: Path | None) -> None
     def invalid(self, route_id: str, relative_path: str, reason: str) -> None
+# Structural configuration protocols, field names exactly as DESIGN.md §11 spells them, so the
+# WP1 dataclasses satisfy them without importing anything from this package:
+#   RouteConfig(id, source); SpoolSourceConfig(root, include, exclude, readiness, camera)
+#   ReadinessConfig(mode, quietSecs, markerSuffix)
+#   CameraConfig(component, instance, subscribeAnnouncements, reconcileCaptureStatusSecs)
+#   TriggerSourceConfig(subscribe, fileRoot, inlineStaging, maxInlineBytes)
+# Read through staging.config_field(obj, *names, default=...): mapping or attribute access, camelCase
+# or snake_case, a null value counts as absent.
+
+# staging.py     processor-owned staging + the path/digest/config primitives the sources share
+lstat = os.lstat ; realpath = os.path.realpath        # seams: a test injects a reparse-point stat
+class SourceError(Exception): code: str               # StagingError | PathError | ConfigFieldError
+def config_field(source, *names, default=...) -> Any
+def sha256_bytes(data) -> str ; def sha256_file(path, chunk=1<<20) -> str
+def plain_digest(value) -> str                        # accepts "<hex>" or "sha256:<hex>"
+def stat_signature(path) -> tuple | None              # (size, mtime_ns); re-stat around every hash
+def classify_path(path) -> str | None                 # MISSING|SYMLINK|REPARSE_POINT|DIRECTORY|DEVICE_FILE|NOT_REGULAR_FILE
+def normalize_relative(value) -> str                  # forward slashes; rejects absolute/drive/".."
+def real_root(root) -> Path ; def relative_to_root(root, path) -> str
+def resolve_under_root(root, relative) -> Path        # realpath first, containment second
+def staged_path_for(staging_root, sha256, suffix="") -> Path      # <root>/<hex[:2]>/<hex><suffix>
+def stage_copy(src, staging_root, sha256) -> Path     # temp + fsync + verify + atomic install; idempotent
+def stage_bytes(data, staging_root, sha256, suffix="") -> Path    # the inline trigger's path onto disk
+
+# readiness.py
+@dataclass(frozen=True) class ReadyVerdict: ready: bool; identity: SourceIdentity | None; reason: str
+class ReadinessStrategy(Protocol): mode: str; def ready(self, path, relative_path) -> ReadyVerdict
+class CameraSidecarReadiness  # parses <image>.json, verifies image.bytes/sha256, returns the identity
+class CameraStatusReadiness   # ready only on a verified SUCCEEDED record; re-stats, does not re-hash
+class MarkerReadiness         # <path><suffix> exists; identity is None, the caller hashes
+class StabilityReadiness      # size+mtime still for quietSecs, injected clock; prune(keep)
+class Readiness:                                      # the rule one route uses
+    @staticmethod
+    def for_route(route, *, status_lookup=None, clock=time.monotonic) -> Readiness
+        # default mode: cameraSidecar when camera-bound, else stability
+        # raises ReadinessError: UNKNOWN_READINESS_MODE | STABILITY_NOT_PERMITTED_ON_CAMERA_ROUTE
+        #                      | CAMERA_STATUS_REQUIRES_RECONCILER | MARKER_SUFFIX_REQUIRED
+    mode: str ; strategy: ReadinessStrategy
+    def ready(self, path, relative_path) -> ReadyVerdict
+    def companion_suffixes(self) -> tuple                 # what the walk skips beside an image
+    def prune(self, keep) -> None
+def parse_timestamp_ms(value) -> int | None               # RFC 3339 as chrono writes it
+def read_sidecar(path) -> dict | None
+def verify_declared_image(path, image) -> tuple[int | None, str | None, str | None]
+def identity_from_capture(route_id, relative_path, document, size, sha256, kind=SPOOL) -> SourceIdentity
+
+# camera.py
+def capture_status_topic(device, component, instance=None) -> str   # .../cmd/sb/capture-status
+def image_captured_topic(device, component, instance) -> str        # .../app/image/captured
+@dataclass(frozen=True) class CaptureRecord: capture_id; relative_path; identity; signature; terminal_at_ms
+class CaptureStatusReconciler:
+    def __init__(self, *, route_id, root, topic, request, kv_get, kv_set, instance=None,
+                 interval_secs=30.0, page_limit=100, request_timeout_secs=10.0,
+                 on_verified=None, kv_key=None, clock=time.monotonic)
+        # request(topic, body, timeout_secs) -> reply ; kv_get/kv_set are the WP3 ledger KV
+    def poll_once(self) -> int      # List mode {"states":["SUCCEEDED"],...}, follows every nextCursor,
+                                    # dedupes by captureId, verifies file+digest, advances the watermark
+    def lookup(self, relative_path) -> CaptureRecord | None      # what CameraStatusReadiness calls
+    def lookup_capture(self, capture_id) -> dict | None          # Capture mode; None on CAPTURE_NOT_FOUND
+    def records(self) -> dict ; def start(self) ; def stop(self, timeout_s=5.0)
+
+# spool.py
+def compile_glob(pattern) -> re.Pattern   # ** crosses separators, "**/" also matches zero directories
 class SpoolSource:
-    def __init__(self, route: RouteConfig, events: SourceEvents, clock=time.monotonic): ...
-    def start(self) / stop(self)
-    def rescan(self) -> int                                             # authoritative scan; returns newly-ready count; also called by trigger-rescan
-    def on_hint(self, body: dict) -> None                               # ImageCaptured body: map relativePath, verify bytes/sha256
-class Readiness: strategies cameraSidecar | cameraStatus | marker | stability -> ready(path) -> ReadyVerdict(ready: bool, identity: SourceIdentity | None, reason)
-class CaptureStatusReconciler:            # pages sb/capture-status via gg.get_messaging() request/reply every reconcileCaptureStatusSecs; dedupe by captureId; watermark persisted via a small KV in the ledger (WP3 exposes kv_get/kv_set)
+    def __init__(self, route, events, clock=time.monotonic, *, status_lookup=None,
+                 observer_factory=None, debounce_secs=0.5, rescan_interval_secs=60.0)
+    def start(self) ; def stop(self, timeout_s=5.0) ; def nudge(self) -> None
+    def rescan(self) -> int         # authoritative walk; also the trigger-rescan command's path
+    def on_hint(self, body: dict) -> None       # ImageCaptured: relativePath under the root, never
+                                                # absolutePath; verifies bytes/sha256 = ready by proof
+    def prime(self, pairs) -> None  # seed the announced (relative_path, sha256) set from the ledger
+    def seen(self) -> set
+    # counters WP6 reports as ImageProcessorDiscovery: discovered_count, rejected_count, rescans,
+    # nudges, hints_accepted, hints_rejected, hints_unmapped
+
+# trigger.py
 class TriggerSource:
-    def __init__(self, route: RouteConfig, events: SourceEvents, staging: Path): ...
-    def on_message(self, message) -> None                               # inline (opaque or body["image"] bytes, ≤ 64 KiB) -> staging file; reference -> containment + sha256/bytes check
-    # reply correlation: events.discovered(...) carries correlation_id and reply_to via SourceIdentity/extra so WP6 can reply
-def stage_copy(src: Path, staging_root: Path, sha256: str) -> Path      # immutable processor-owned copy when the source fs gives no stable handle
+    def __init__(self, route, events, staging: Path | None = None, *, file_root=None,
+                 max_inline_bytes=None)          # both default from the route; the cap is clamped to 64 KiB
+    subscribe: tuple[str, ...]
+    def on_message(self, message) -> None
+        # "relativePath" in the body → reference: containment + bytes/sha256 verified + stage_copy
+        # otherwise → inline: opaque binary body, body["image"] bytes, or the core binary marker
+        # SourceIdentity carries correlation_id and reply_to so WP6 can answer the requester
+    accepted: int ; rejected: int
+def suffix_for(data) -> str ; def message_body(message) ; def request_correlation(message) -> tuple
 ```
 
 Spool discovery uses `watchdog` observers feeding a debounced scan queue; `rescan()` is the
-authoritative path and the watchdog only nudges it.
+authoritative path and the watchdog only nudges it. A periodic interval nudges it as well, so a
+dropped notification costs latency and never a job.
 
 ## 8. `outputs/`, wiring, commands, metrics, health (WP6)
 

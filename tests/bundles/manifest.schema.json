@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.edgecommons.mbreissi.com/schemas/model-bundle-manifest.schema.json",
+  "title": "Model bundle manifest",
+  "description": "WP2 test fixture standing in for schemas/model-bundle-manifest.schema.json (WP1). It carries the DESIGN.md section 8 key names and shapes so the loader is tested against the real contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "modelId",
+    "version",
+    "files",
+    "minOnnxRuntime",
+    "providersPermitted",
+    "providerPolicy",
+    "inputs",
+    "outputs",
+    "family",
+    "transformVersion"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "modelId": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "files": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    },
+    "minOnnxRuntime": { "type": "string", "minLength": 1 },
+    "providersPermitted": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "providerPolicy": { "type": "string", "minLength": 1 },
+    "inputs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/tensor" } },
+    "outputs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/tensor" } },
+    "dynamicBatch": { "type": "boolean" },
+    "family": {
+      "type": "string",
+      "enum": ["classification", "detection", "segmentation", "anomaly"]
+    },
+    "familyParams": { "type": "object" },
+    "preprocess": { "type": "object" },
+    "decisionRules": { "type": "object" },
+    "maxResultItems": { "type": "integer", "minimum": 0 },
+    "estimatedDeviceMiB": { "type": "integer", "minimum": 0 },
+    "warmup": { "type": "array", "items": { "type": "object" } },
+    "tolerances": { "type": "object" },
+    "compatibilityKeys": { "type": "object" },
+    "provenance": { "type": "object" },
+    "keyId": { "type": ["string", "null"] },
+    "transformVersion": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "tensor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "dtype", "shape"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "dtype": { "type": "string", "minLength": 1 },
+        "shape": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": ["integer", "string"] }
+        }
+      }
+    }
+  }
+}

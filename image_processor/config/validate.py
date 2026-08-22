@@ -267,7 +267,7 @@ def _check_route(route: RouteConfig, config: ComponentConfig) -> None:
         source = route.source
         if source.camera is not None and source.readiness.mode is ReadinessMode.STABILITY:
             raise ConfigError(
-                "STABILITY_ON_CAMERA_ROUTE",
+                "STABILITY_NOT_PERMITTED_ON_CAMERA_ROUTE",
                 f"route '{route.id}' is camera-bound, so it cannot infer finalization from "
                 "size and mtime; use cameraSidecar or cameraStatus",
             )

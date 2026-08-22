@@ -67,6 +67,17 @@ spool root the component mutates.
 | `maxRetryBackoffSecs` | number > 0 | `300` | The ceiling on the exponential retry delay. |
 | `queueAgeWarningSecs` | integer ≥ 1 | `300` | The age of the oldest queued job at which a route reports a degraded condition on `evt`. Backlog never discards admitted work, so this threshold is how you learn that evidence delivery is falling behind. |
 
+## `component.global.discovery`
+
+How a spool route finds work. Filesystem state is authoritative: OS notifications only nudge a
+walk, and the periodic walk runs whether or not a notification ever arrives, so a missed event
+delays a job rather than losing it.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `rescanSecs` | integer ≥ 1 | `60` | How often a route walks its root with no notification at all. This is the interval within which a file whose event was dropped is still found. |
+| `debounceMs` | integer ≥ 0 | `500` | How long notifications must stop before a nudged walk runs. A camera writing a burst of files produces one walk rather than one per file; `0` walks on every nudge. |
+
 ## `component.global.publish`
 
 The result on `app/inference/result` is the only cleanup-gating output. It is prepared once, stored
@@ -77,7 +88,8 @@ byte for byte in the ledger, and published with positive transport confirmation.
 | `confirmationTimeoutSecs` | number > 0 | `10` | How long one publish attempt waits for a PUBACK at QoS 1, or for the Greengrass IPC publish operation to complete, before it counts as a failed attempt. The stored bytes are retried unchanged. |
 | `requireConfirmationBeforeCleanup` | boolean | `true` | Whether archive, delete, and quarantine wait for transport confirmation. Turning it off lets the component reclaim disk during a long broker outage at the cost of the evidence guarantee, so a regulated deployment leaves it on. |
 | `maxAttempts` | integer ≥ 1 | `100` | How many publish attempts one outbox row makes before the job moves to `PUBLISH_EXHAUSTED` and waits for the `retry-publication` command. The row and its bytes are kept. |
-| `outboxCapacity` | integer ≥ 1 | `100000` | How many rows the outbox holds. Admission reserves capacity for the largest result a route can produce, so a finished job is never stranded by a full outbox; when the reserve cannot be met the component stops claiming new work and reports the pressure. |
+| `outboxCapacity` | integer ≥ 1 | `100000` | How many rows the outbox holds. This bounds the count of pending publications; `outboxReserveBudgetMiB` bounds their size. |
+| `outboxReserveBudgetMiB` | integer ≥ 1 | `256` | How much outbox and evidence capacity admission may hold in total. A job is admitted only after it reserves room for the largest result its route can produce, so a finished job is never stranded by a full outbox; when the reserve cannot be met the component stops claiming new work and reports the pressure. |
 
 ## `component.global.signing`
 
@@ -135,7 +147,7 @@ block, which is also where the archive and quarantine directories live.
 | `onInvalidInput` | action | `quarantine` | What happens to an input that can never succeed: a corrupt or undecodable image, a digest that does not match its sidecar, a reference that escapes its root. |
 | `onOperationalFailure` | action | `retainInPlace` | What happens when inference exhausts its retry budget. The input is intact, so retaining it keeps a later reprocess possible. |
 | `onPublishFailure` | action | `retainInPlace` | What happens when publication exhausts its attempts. The result is already committed and the outbox row is kept, so the input is retained until you run `retry-publication`. |
-| `onCollision` | `fail` | `fail` | What happens when an action's target path already holds a different object: the job records `CLEANUP_FAILED` and both files are left intact, so it waits for `retry-cleanup` or an operator. Evidence is never overwritten, which is why this is the only policy. |
+| `onCollision` | `fail` \| `suffix` | `fail` | What happens when an action's target path already holds a different object. `fail`: the job records `CLEANUP_FAILED` and both files are left intact, so it waits for `retry-cleanup` or an operator. `suffix`: the input is installed beside the occupant under a deterministic name derived from its own digest, so the move completes and the name is reproducible from the ledger. Neither policy overwrites the object already there. |
 
 An **action** is one of:
 
@@ -282,7 +294,7 @@ Every rejection carries a stable code. The most common ones:
 | `COMPLETION_DIR_NOT_CREATABLE` | A completion directory exists as a file, or its nearest existing ancestor is missing or not writable. |
 | `INLINE_STAGING_NOT_CONTAINED` | A trigger route stages inline images outside `paths.staging`, or inside its own `fileRoot`. |
 | `INLINE_LIMIT_EXCEEDED` | `maxInlineBytes` is above the core envelope's 64 KiB binary-body cap. |
-| `STABILITY_ON_CAMERA_ROUTE` | A camera-bound route uses `stability` readiness. |
+| `STABILITY_NOT_PERMITTED_ON_CAMERA_ROUTE` | A camera-bound route uses `stability` readiness. |
 | `CAMERA_BINDING_REQUIRED` | A route reads `cameraStatus` but names no `source.camera`. |
 | `PROVIDER_POLICY_UNSATISFIED` | `requiredProvider` is not among `providers`, or CPU-only execution is configured without `allowCpuOnly`. |
 | `MODEL_URI_SCHEME_NOT_ALLOWED`, `MODEL_URI_NOT_ALLOWED` | A `models[].uri` uses a scheme or a prefix `modelSources` does not allow. |
@@ -316,7 +328,8 @@ Every rejection carries a stable code. The most common ones:
       },
       "gpu": { "devices": ["0"], "residentMemoryBudgetPercent": 80, "reserveMiB": 2048 },
       "scheduler": { "maxBatchLatencyMs": 20, "hotTtlSecs": 120, "minResidencySecs": 15 },
-      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true },
+      "discovery": { "rescanSecs": 60, "debounceMs": 500 },
+      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true, "outboxReserveBudgetMiB": 256 },
       "signing": {
         "required": true,
         "trustedKeys": [

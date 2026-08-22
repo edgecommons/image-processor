@@ -94,7 +94,9 @@ SCHEMA_DEFAULT_BLOCKS = {
         "requireConfirmationBeforeCleanup": "require_confirmation_before_cleanup",
         "maxAttempts": "max_attempts",
         "outboxCapacity": "outbox_capacity",
+        "outboxReserveBudgetMiB": "outbox_reserve_budget_mib",
     },
+    "discovery": {"rescanSecs": "rescan_secs", "debounceMs": "debounce_ms"},
     "modelSources": {
         "allowedSchemes": "allowed_schemes",
         "allowedUriPrefixes": "allowed_uri_prefixes",
@@ -108,6 +110,7 @@ BLOCK_ATTRIBUTES = {
     "gpu": "gpu",
     "scheduler": "scheduler",
     "publish": "publish",
+    "discovery": "discovery",
     "modelSources": "model_sources",
 }
 
@@ -411,6 +414,11 @@ def test_two_routes_may_not_share_an_id(global_config, spool_route):
             lambda r: r["completion"].update(onCollision="overwrite"),
             "INVALID_VALUE",
             id="collisions-never-overwrite",
+        ),
+        pytest.param(
+            lambda r: r["completion"].update(onCollision="rename"),
+            "INVALID_VALUE",
+            id="collision-policies-are-closed",
         ),
         pytest.param(
             lambda r: r["completion"].update(archiveDir="processed"),

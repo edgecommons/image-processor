@@ -11,12 +11,12 @@ the network, so a candidate can be parsed before it is committed.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from image_processor.types import CompletionAction, Family, ModelRef, SecretRef
+from image_processor.types import CompletionAction, Family, ModelRef, SecretRef, SourceKind
 
 __all__ = [
     "CollisionPolicy",
@@ -24,6 +24,7 @@ __all__ = [
     "ComponentConfig",
     "ConfigError",
     "DecisionSignal",
+    "DiscoveryConfig",
     "GpuConfig",
     "ModelActivation",
     "ModelEntry",
@@ -81,18 +82,34 @@ class ConfigError(ValueError):
 
 
 class ReadinessMode(str, Enum):
-    """How a spool route proves that a file is finalized (DESIGN.md §4.1)."""
+    """How a spool route proves that a file is finalized (DESIGN.md §4.1).
+
+    ``str()`` returns the configured spelling, not the member name, so a consumer that
+    normalizes a configuration field with ``str()`` sees the same value whether it was handed a
+    parsed route or the raw JSON. ``sources/readiness.py`` does exactly that.
+    """
 
     CAMERA_SIDECAR = "cameraSidecar"
     CAMERA_STATUS = "cameraStatus"
     MARKER = "marker"
     STABILITY = "stability"
 
+    __str__ = str.__str__
+
 
 class CollisionPolicy(str, Enum):
-    """What a completion action does when its target already holds a different object."""
+    """What a completion action does when its target already holds a different object.
+
+    ``FAIL`` records ``CLEANUP_FAILED`` and leaves both files intact. ``SUFFIX`` installs the
+    input beside the occupant under a deterministic name derived from its own digest, so the
+    move completes without overwriting evidence and the name is reproducible from the ledger
+    (DESIGN.md §7). Neither policy ever replaces an existing object.
+    """
 
     FAIL = "fail"
+    SUFFIX = "suffix"
+
+    __str__ = str.__str__
 
 
 #: The configured spelling of each completion action, as `config.schema.json` writes it.
@@ -102,6 +119,9 @@ COMPLETION_ACTION_NAMES = {
     "retainInPlace": CompletionAction.RETAIN,
     "quarantine": CompletionAction.QUARANTINE,
 }
+
+#: The configured spellings of the collision policies.
+_COLLISION_POLICIES = tuple(item.value for item in CollisionPolicy)
 
 #: The actions that move or remove the input, and therefore claim ownership of its root.
 MUTATING_ACTIONS = frozenset(
@@ -336,6 +356,25 @@ class PublishConfig:
     require_confirmation_before_cleanup: bool
     max_attempts: int
     outbox_capacity: int
+    outbox_reserve_budget_mib: int
+
+    @property
+    def outbox_reserve_budget_bytes(self) -> int:
+        """The reservation budget in bytes, as the ledger takes it."""
+        return self.outbox_reserve_budget_mib * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class DiscoveryConfig:
+    """How often a spool route walks its root, and how long it debounces notifications."""
+
+    rescan_secs: int
+    debounce_ms: int
+
+    @property
+    def debounce_secs(self) -> float:
+        """The debounce window in seconds, as the spool source takes it."""
+        return self.debounce_ms / 1000.0
 
 
 @dataclass(frozen=True)
@@ -397,15 +436,38 @@ class ModelEntry:
 
 @dataclass(frozen=True)
 class CompletionPolicy:
-    """What happens to the input after a job reaches a terminal outcome."""
+    """What happens to the input after a job reaches a terminal outcome.
+
+    A route's resolved policy satisfies the structural protocol
+    ``image_processor.completion.actions.CompletionPolicy`` that WP3's ``Completer`` consumes:
+    ``source_root`` is the directory the job's relative path resolves under, and the four action
+    fields plus ``on_collision`` and the two directories say what to do with it. Every use site
+    in ``completion/`` wraps a path in ``Path(...)``, so the ``Path`` values here satisfy a
+    protocol that annotates them as ``str``.
+
+    ``source_root`` is ``None`` on ``ComponentConfig.completion_defaults``, which is a template
+    every route inherits from rather than a policy any route runs under.
+    """
 
     on_success: CompletionAction
     on_invalid_input: CompletionAction
     on_operational_failure: CompletionAction
     on_publish_failure: CompletionAction
     on_collision: CollisionPolicy
+    source_root: Optional[Path] = None
     archive_dir: Optional[Path] = None
     failed_dir: Optional[Path] = None
+
+    def with_source_root(self, root: Path) -> "CompletionPolicy":
+        """Return this policy resolved against another root.
+
+        Args:
+            root: The directory a job's relative path resolves under.
+
+        Returns:
+            A copy carrying that root.
+        """
+        return replace(self, source_root=root)
 
     @property
     def actions(self) -> tuple:
@@ -530,6 +592,24 @@ class RouteConfig:
             return ()
         return (self.input_root,)
 
+    def completion_for(self, kind: "SourceKind") -> CompletionPolicy:
+        """Return the completion policy resolved for one input's source kind.
+
+        A spool input, and an inline trigger image staged by the component, both resolve under
+        the route's own root. A trigger input that arrived as a file reference resolves under
+        ``fileRoot`` instead, which is a different directory, so the policy handed to the
+        completer carries the root that input actually came from.
+
+        Args:
+            kind: The source kind of the input being completed.
+
+        Returns:
+            The policy, with ``source_root`` set for that kind.
+        """
+        if kind is SourceKind.REFERENCE and isinstance(self.source, TriggerSourceConfig):
+            return self.completion.with_source_root(self.source.file_root)
+        return self.completion
+
     @property
     def output_dirs(self) -> tuple:
         """Return the directories this route writes completed inputs into."""
@@ -549,6 +629,7 @@ class ComponentConfig:
     runtime: RuntimeConfig
     gpu: GpuConfig
     scheduler: SchedulerConfig
+    discovery: DiscoveryConfig
     publish: PublishConfig
     signing: SigningConfig
     model_sources: ModelSourcesConfig
@@ -588,6 +669,7 @@ _GLOBAL_KEYS = (
     "runtime",
     "gpu",
     "scheduler",
+    "discovery",
     "publish",
     "signing",
     "modelSources",
@@ -715,7 +797,7 @@ def _parse_publish(global_cfg: dict) -> PublishConfig:
     node = _child(
         global_cfg, "publish", "global",
         ("confirmationTimeoutSecs", "requireConfirmationBeforeCleanup", "maxAttempts",
-         "outboxCapacity"),
+         "outboxCapacity", "outboxReserveBudgetMiB"),
     )
     return PublishConfig(
         confirmation_timeout_secs=_number(
@@ -728,6 +810,19 @@ def _parse_publish(global_cfg: dict) -> PublishConfig:
         outbox_capacity=_number(
             node, "outboxCapacity", where, default=100000, integer=True, minimum=1
         ),
+        outbox_reserve_budget_mib=_number(
+            node, "outboxReserveBudgetMiB", where, default=256, integer=True, minimum=1
+        ),
+    )
+
+
+def _parse_discovery(global_cfg: dict) -> DiscoveryConfig:
+    """Build the spool-walk cadence, applying the schema's defaults."""
+    where = "global.discovery"
+    node = _child(global_cfg, "discovery", "global", ("rescanSecs", "debounceMs"))
+    return DiscoveryConfig(
+        rescan_secs=_number(node, "rescanSecs", where, default=60, integer=True, minimum=1),
+        debounce_ms=_number(node, "debounceMs", where, default=500, integer=True, minimum=0),
     )
 
 
@@ -829,7 +924,12 @@ def _parse_completion_defaults(global_cfg: dict) -> CompletionPolicy:
         ("onSuccess", "onInvalidInput", "onOperationalFailure", "onPublishFailure",
          "onCollision"),
     )
-    _string(node, "onCollision", where, default="fail", choices=("fail",))
+    collision = CollisionPolicy(
+        _string(
+            node, "onCollision", where,
+            default=CollisionPolicy.FAIL.value, choices=_COLLISION_POLICIES,
+        )
+    )
     return CompletionPolicy(
         on_success=_completion_action(
             node, "onSuccess", where, default=CompletionAction.ARCHIVE
@@ -843,7 +943,7 @@ def _parse_completion_defaults(global_cfg: dict) -> CompletionPolicy:
         on_publish_failure=_completion_action(
             node, "onPublishFailure", where, default=CompletionAction.RETAIN
         ),
-        on_collision=CollisionPolicy.FAIL,
+        on_collision=collision,
     )
 
 
@@ -855,7 +955,12 @@ def _parse_completion(node: dict, where: str, defaults: CompletionPolicy) -> Com
          "onCollision", "archiveDir", "failedDir"),
     )
     place = f"{where}.completion"
-    _string(block, "onCollision", place, default="fail", choices=("fail",))
+    collision = CollisionPolicy(
+        _string(
+            block, "onCollision", place,
+            default=defaults.on_collision.value, choices=_COLLISION_POLICIES,
+        )
+    )
     return CompletionPolicy(
         on_success=_completion_action(block, "onSuccess", place, default=defaults.on_success),
         on_invalid_input=_completion_action(
@@ -867,7 +972,7 @@ def _parse_completion(node: dict, where: str, defaults: CompletionPolicy) -> Com
         on_publish_failure=_completion_action(
             block, "onPublishFailure", place, default=defaults.on_publish_failure
         ),
-        on_collision=defaults.on_collision,
+        on_collision=collision,
         archive_dir=_path(block, "archiveDir", place, default=None),
         failed_dir=_path(block, "failedDir", place, default=None),
     )
@@ -1012,18 +1117,22 @@ def _parse_route(raw: Any, index: int, defaults: CompletionPolicy) -> RouteConfi
     )
     if not model_node:
         raise ConfigError("MISSING_FIELD", f"{where}.modelRef is required")
+    source = _parse_source(node, where)
+    primary_root = (
+        source.root if isinstance(source, SpoolSourceConfig) else source.inline_staging
+    )
     return RouteConfig(
         id=route_id,
         enabled=_bool(node, "enabled", where, default=True),
         priority=_number(node, "priority", where, default=0, integer=True, minimum=0, maximum=1000),
-        source=_parse_source(node, where),
+        source=source,
         model_ref=ModelRef(
             id=_string(model_node, "id", f"{where}.modelRef", pattern=_MODEL_ID),
             version=_string(model_node, "version", f"{where}.modelRef", pattern=_MODEL_VERSION),
             digest=_string(model_node, "digest", f"{where}.modelRef", pattern=_DIGEST),
         ),
         outputs=_parse_outputs(node, where),
-        completion=_parse_completion(node, where, defaults),
+        completion=_parse_completion(node, where, defaults).with_source_root(primary_root),
         reprocess_existing_on_model_change=_bool(
             node, "reprocessExistingOnModelChange", where, default=False
         ),
@@ -1071,6 +1180,7 @@ def parse_component_config(global_cfg: Any, instances: Any) -> ComponentConfig:
         runtime=_parse_runtime(global_cfg),
         gpu=_parse_gpu(global_cfg),
         scheduler=_parse_scheduler(global_cfg),
+        discovery=_parse_discovery(global_cfg),
         publish=_parse_publish(global_cfg),
         signing=_parse_signing(global_cfg),
         model_sources=_parse_model_sources(global_cfg),

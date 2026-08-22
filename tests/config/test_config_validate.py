@@ -223,7 +223,7 @@ def test_a_completion_directory_that_does_not_exist_yet_is_accepted(candidate, w
 
 def test_a_camera_bound_route_may_not_infer_finalization_from_stability(candidate):
     candidate["component"]["instances"][0]["source"]["readiness"] = {"mode": "stability"}
-    assert rejection(candidate) == "STABILITY_ON_CAMERA_ROUTE"
+    assert rejection(candidate) == "STABILITY_NOT_PERMITTED_ON_CAMERA_ROUTE"
 
 
 def test_reading_capture_status_needs_a_camera_binding(candidate):
