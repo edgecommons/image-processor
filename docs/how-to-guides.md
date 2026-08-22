@@ -1,83 +1,147 @@
 # How-to Guides
 
-*This documents the generated scaffold; rewrite it as you build the component out.*
-
-Recipes for specific tasks. Each assumes the scaffold runs (see the [tutorial](tutorial.md)). For
-concepts see [explanation.md](explanation.md); for exhaustive options see [reference/](reference/).
+Recipes for specific tasks. For concepts see [explanation.md](explanation.md); for exhaustive
+options see [reference/](reference/).
 
 ---
 
-## Write a new stage
+## Build and sign a model bundle
 
-A stage is a `Processor` subclass: `process(msg) -> List[ProcMsg]` (0..N out — filter/map/fan-out are
-all this shape), and optionally `on_tick(now_ms) -> List[ProcMsg]` for a *stateful* stage (a window, a
-debounce, a batch) that emits on a timer rather than on arrival:
+A model bundle is the unit the component installs: one tar archive, optionally gzip-compressed,
+that carries `manifest.json`, the detached signature `manifest.sig`, and the model files. The
+archive's SHA-256 is the bundle digest, and that digest is what configuration pins. Build a
+bundle with `tools/make_bundle.py`.
 
-```python
-class ThresholdCross(Processor):
-    def __init__(self, path: str, above: float):
-        self.path, self.above = path, above
+1. Create a signing keypair. Do this once per publisher, and keep the private key off the
+   devices that consume bundles.
 
-    def process(self, m: ProcMsg) -> List[ProcMsg]:
-        v = pluck(m.msg.body, self.path)
-        return [m] if isinstance(v, (int, float)) and v > self.above else []
+   ```bash
+   python tools/make_bundle.py --gen-key keys/pharma-model-publisher-1.pem
+   ```
+
+   The command writes three files: the private key PEM, the public key PEM
+   (`...pem.pub.pem`), and the raw 32-byte public key (`...pem.pub`). To protect the private key
+   with a passphrase, add `--key-password`.
+
+2. Lay out the bundle directory. Put the ONNX graph at `model.onnx`, and add the files the task
+   family and the operators need beside it:
+
+   ```text
+   line-clearance-cam-01/
+     manifest.json
+     model.onnx
+     labels.json
+     transforms.json
+     result.schema.json
+     model-card.json
+     warmup/input-01.bin
+     warmup/expected-01.json
+   ```
+
+3. Write `manifest.json`. Declare the model identity, the runtime and provider requirements, the
+   tensor shapes, the task family and its parameters, the preprocessing, the decision rules, the
+   result bounds, the warmup samples and tolerances, the engine compatibility keys, and the
+   provenance. Leave `files` out: the tool computes every per-file digest.
+
+   ```json
+   {
+     "schemaVersion": 1,
+     "modelId": "line-clearance-cam-01",
+     "version": "2026.08.20",
+     "minOnnxRuntime": "1.18.0",
+     "providersPermitted": ["CUDAExecutionProvider"],
+     "providerPolicy": "required",
+     "inputs": [{ "name": "images", "dtype": "float32", "shape": ["N", 3, 224, 224] }],
+     "outputs": [{ "name": "logits", "dtype": "float32", "shape": ["N", 2] }],
+     "dynamicBatch": true,
+     "family": "classification",
+     "familyParams": { "topK": 2, "activation": "softmax" },
+     "preprocess": { "resize": [224, 224], "layout": "NCHW" },
+     "decisionRules": { "pass": "$.classes[0].label == 'clear'", "threshold": 0.8 },
+     "maxResultItems": 10,
+     "estimatedDeviceMiB": 512,
+     "warmup": [{ "input": "warmup/input-01.bin", "expected": "warmup/expected-01.json" }],
+     "tolerances": { "score": 0.001 },
+     "compatibilityKeys": { "gpuClass": "sm_86" },
+     "provenance": { "publisher": "pharma-mlops" },
+     "transformVersion": "2026.08.20-1"
+   }
+   ```
+
+4. Pack and sign the bundle. `--key-id` is the name the device configuration maps to the public
+   key, and it is recorded in the manifest.
+
+   ```bash
+   python tools/make_bundle.py line-clearance-cam-01 \
+       --out dist/line-clearance-cam-01-2026.08.20.tar.gz \
+       --key keys/pharma-model-publisher-1.pem \
+       --key-id pharma-model-publisher-1 \
+       --schema schemas/model-bundle-manifest.schema.json
+   ```
+
+   The tool merges your manifest with the computed `files` digests, validates it against the
+   schema, signs the exact manifest bytes, packs the archive, and prints the bundle digest:
+
+   ```text
+   sha256:9f2c1e...c41d
+   ```
+
+   Builds are reproducible. The same directory and key always produce the same digest, so you
+   can rebuild a bundle to confirm the digest you shipped.
+
+5. Publish the archive to a local path, an https origin, or an S3 bucket, and pin it in
+   `component.global.models[]` with the digest the tool printed:
+
+   ```jsonc
+   {
+     "id": "line-clearance-cam-01",
+     "version": "2026.08.20",
+     "digest": "sha256:9f2c1e...c41d",
+     "uri": "s3://approved-models/line-clearance-cam-01/2026.08.20.tar.gz"
+   }
+   ```
+
+6. Trust the signing key on the device. Add the public key under
+   `component.global.signing.trustedKeys[]` against the same `keyId`, and set
+   `signing.required` to `true` where a verified signature is mandatory. The raw public key
+   (`...pem.pub`) is the value to store; a `$secret` reference keeps it out of the deployment
+   document.
+
+   ```jsonc
+   "signing": {
+     "required": true,
+     "trustedKeys": [
+       {
+         "keyId": "pharma-model-publisher-1",
+         "publicKey": { "$secret": "model-signing/publisher-1" }
+       }
+     ]
+   }
+   ```
+
+The component verifies the tarball digest, then the signature, then extracts under path, count,
+size, and ratio limits, then verifies the per-file digests and the manifest schema, and only then
+promotes the bundle into its content-addressed cache. Any bundle that fails a check is refused
+and the route stays on its last-known-good model.
+
+## Serve bundles from S3
+
+`s3://` sources need the `s3` extra, which is not installed by default:
+
+```bash
+pip install ".[s3]"
 ```
 
-Register it in `image_processor/pipeline.py`'s `_STAGES` table **and** add the matching variant to
-`config.schema.json`'s `stage` definition — the two are one contract, and an unknown or misspelt
-stage name is rejected when the route is parsed, at config time, not on the first message.
+Without it, an `s3://` URI fails with `S3_UNAVAILABLE` and the rest of the component keeps
+running. Give the model entry a `credentials` `$secret` reference to use explicit keys, or leave
+it out to use the ambient credentials of the host or the Greengrass token exchange service.
 
-## Add a route
+## Restrict where bundles come from
 
-Each entry of `component.instances[]` is one route — its own thread, its own bounded queue, its own
-pipeline:
-
-```jsonc
-{
-  "id": "alarms",
-  "subscribe": ["ecv1/+/+/+/data/#"],
-  "publishTopic": "ecv1/gw-01/image-processor/alarms/data/summary",
-  "target": "local",
-  "pipeline": [ { "fieldEquals": { "path": "signal.id", "value": "pressure-1" } } ],
-  "tickMs": 5000
-}
-```
-
-`id` becomes the route's UNS instance token — it must be lower-kebab. A slow or malformed route never
-stalls another: a bad one is skipped at startup with a warning (unless *every* route is malformed, in
-which case the component refuses to start rather than idle silently).
-
-## Send a route's output northbound
-
-Set `"target": "northbound"` on the route instead of `"local"`. The dispatcher then calls
-`get_messaging().publish_northbound(...)` with `Qos.AT_LEAST_ONCE` instead of the default local
-publish — useful for a rollup that should reach IoT Core directly rather than staying on the
-device-local bus.
-
-## Keep the self-echo guard intact
-
-If your route's `subscribe` filter could ever match its own `publishTopic` (a very common case —
-`ecv1/+/+/+/data/#` matches almost everything), do **not** remove the `is_self_echo` check in
-`_handler`. `main.py`'s `receive_own_messages(False)` only holds on Greengrass IPC; an MQTT broker
-redelivers your own publishes to your own wildcard subscription regardless, so the guard in
-`image_processor/pipeline.py` is what actually stops the loop.
-
-## Report a real connection
-
-A processor's routes are subscriptions on a bus the library already reports on — not links to a
-device — so `instance_connectivity()` returns an empty list by default. Once a stage calls out to
-something with its own liveness (a database, an upstream API), report it:
-
-```python
-from edgecommons.heartbeat.instance_connectivity import InstanceConnectivity
-
-def instance_connectivity(self):
-    return [
-        InstanceConnectivity.of("enrich", self._db.is_connected(), "postgres://plant-db")
-        .with_state("ONLINE")
-        .with_attributes({"pool": self._db.pool_size()})
-    ]
-```
+An `https://` source is downloaded with certificate and hostname verification, and a URL that
+carries credentials is refused. Where the deployment configures allow-listed prefixes, both the
+URL and every redirect target must start with one of them, so a redirect cannot walk a download
+off the approved origin.
 
 ## Deploy to a platform
 

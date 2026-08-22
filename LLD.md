@@ -161,35 +161,66 @@ def validate_candidate(candidate: dict, current: dict | None, phase) -> Configur
 ## 4. `bundles/` (WP2)
 
 ```python
-# archive.py
+# archive.py  (BundleError is defined here, the lowest layer; the package re-exports it)
+class BundleError(Exception): code: str; message: str        # SCREAMING_SNAKE codes, e.g. DIGEST_MISMATCH
 @dataclass(frozen=True) class ExtractLimits: max_members: int = 10_000; max_total_bytes: int = 8 * 2**30; max_member_bytes: int = 4 * 2**30; max_ratio: float = 100.0
+def normalize_digest(digest: str) -> str ; def digest_hex(digest: str) -> str   # accept "sha256:<hex>" or bare hex
 def sha256_file(path: Path, chunk: int = 1 << 20) -> str
 def verify_tarball_digest(path: Path, expected: str) -> None          # raises BundleError("DIGEST_MISMATCH")
-def extract_tarball(path: Path, dest: Path, limits: ExtractLimits) -> list[Path]
-    # rejects absolute paths, "..", symlinks/hardlinks/devices, members outside dest; streams with ratio guard
+def extract_tarball(path: Path, dest: Path, limits: ExtractLimits = ExtractLimits()) -> list[Path]
+    # rejects absolute paths, "..", backslashes, symlinks/hardlinks/devices, duplicates, members outside dest,
+    # and members colliding with an earlier one; streams with member/total/per-member/ratio guards; tar and tar.gz by magic
+def read_member_bytes(path: Path, names: Iterable[str], limits: ExtractLimits = ExtractLimits(), max_bytes: int = 4 << 20) -> Mapping[str, bytes]
+    # manifest.json and manifest.sig are read under the same rules before extraction, so the signature gates the payload (DESIGN.md §9 step 3)
 # manifest.py
-def load_manifest(bundle_dir: Path) -> BundleManifest                  # validates against schemas/model-bundle-manifest.schema.json, then per-file digests
+DEFAULT_SCHEMA_PATH = <repo>/schemas/model-bundle-manifest.schema.json          # the WP1 contract
+def load_manifest(bundle_dir: Path, schema_path: Path | None = None, verify_files: bool = True) -> BundleManifest
+    # manifest.json at the root -> schema -> per-file digests; a file the manifest does not declare is refused (FILE_UNDECLARED)
+def parse_manifest(document: dict) -> BundleManifest ; def validate_document(document: dict, schema_path: Path | None = None) -> None
+def read_manifest_bytes(bundle_dir: Path) -> bytes ; def resolve_model_path(bundle_dir: Path, m: BundleManifest) -> Path
 # signature.py
-def verify_manifest_signature(manifest_bytes: bytes, signature: bytes, public_key_pem_or_raw: bytes) -> None   # Ed25519 via cryptography; raises BundleError("BAD_SIGNATURE")
-def sign_manifest(manifest_bytes: bytes, private_key: bytes) -> bytes                                           # used by tools/make_bundle.py and tests
+def verify_manifest_signature(manifest_bytes: bytes, signature: bytes, public_key_pem_or_raw: bytes) -> None
+    # Ed25519 via cryptography; PEM, DER, or raw 32 bytes, as bytes or text; raises BundleError("BAD_SIGNATURE")
+def sign_manifest(manifest_bytes: bytes, private_key: bytes) -> bytes           # used by tools/make_bundle.py and tests
+def generate_keypair(password: bytes | None = None) -> tuple[bytes, bytes, bytes]   # private PEM, public PEM, raw public key
+def load_public_key / load_private_key / public_key_pem / public_key_raw / private_key_pem
 # cache.py
 class BundleCache:
-    def __init__(self, root: Path): ...                                # <root>/<sha256hex>/{manifest.json, model.onnx, ...} + <root>/<sha256hex>.json metadata
-    def get(self, digest: str) -> CachedBundle | None
-    def promote(self, extracted_dir: Path, digest: str) -> CachedBundle   # atomic rename into place; idempotent
-    def list(self) -> list[CachedBundle]
-    def gc(self, pinned: set[str]) -> list[str]                        # removes unpinned digests
+    def __init__(self, root: Path, schema_path: Path | None = None): ...   # <root>/<sha256hex>/{manifest.json, model.onnx, ...} + <root>/<sha256hex>.json metadata
+    def get(self, digest: str, verify: bool = False) -> CachedBundle | None    # None when absent or half-promoted; raises when a cached bundle no longer verifies
+    def promote(self, extracted_dir: Path, digest: str) -> CachedBundle        # rename into place (copy first across filesystems); idempotent: an existing copy is verified and kept, one that fails is replaced
+    def list(self) -> list[CachedBundle] ; def metadata(self, digest: str) -> dict | None
+    def gc(self, pinned: Iterable[str]) -> list[str]                       # removes unpinned digests, orphan metadata, and stale staging temporaries
 # fetch.py
 class Fetcher(Protocol): def fetch(self, uri: str, dest: Path, credentials: dict | None) -> Path
-def fetcher_for(uri: str) -> Fetcher          # file:// or plain path, https://, s3:// (boto3 optional extra; ImportError -> BundleError("S3_UNAVAILABLE"))
-def stage_bundle(entry: ModelEntry, staging_root: Path, cache: BundleCache, signing: SigningConfig, credentials: dict | None) -> CachedBundle
-    # DESIGN.md §9 steps 2–6 except warmup (warmup is the engine's job, called by the artifact manager in WP6)
+def check_https_uri(uri: str, allowed_prefixes: Sequence[str] | None) -> str   # https only, no credentials in the URL, prefix allow-list over the normalized URL (None = no allow-list configured)
+def fetcher_for(uri: str, allowed_prefixes: Sequence[str] | None = None, timeout_secs: float = 60.0, max_bytes: int | None = None, ssl_context: ssl.SSLContext | None = None) -> Fetcher
+    # plain path or file://, https:// (TLS verified, the policy re-applied to every redirect), s3:// (boto3 optional extra; ImportError -> BundleError("S3_UNAVAILABLE"))
+def stage_bundle(uri: str, digest: str, staging_root: Path, cache: BundleCache, credentials: Mapping | None = None,
+                 signing_required: bool = False, trusted_keys: Mapping[str, bytes] | None = None,
+                 limits: ExtractLimits = ExtractLimits(), schema_path: Path | None = None,
+                 allowed_prefixes: Sequence[str] | None = None, model_id: str | None = None, version: str | None = None,
+                 available_providers: Sequence[str] | None = None, validators: Sequence[Callable[[BundleManifest], None]] = (),
+                 timeout_secs: float = 60.0, max_bytes: int | None = None, ssl_context: ssl.SSLContext | None = None) -> CachedBundle
+    # DESIGN.md §9 steps 2-6 except warmup: unique staging dir -> fetch -> tarball digest -> signature over manifest.json ->
+    # bounded extract -> schema + per-file digests -> identity, provider, and injected validators -> cache.promote
 ```
 
-`tools/make_bundle.py`: `make-bundle <dir> --out <file.tar.gz> --key <ed25519-private.pem>
-[--key-id <id>]` computes per-file digests into `manifest.json` (merging an author-supplied
-`manifest.json`), writes `manifest.sig`, packs, prints the tarball digest. `--gen-key <path>`
-creates an Ed25519 keypair.
+`stage_bundle` takes plain arguments rather than `ModelEntry`/`SigningConfig` so that `bundles/`
+does not depend on `config/`; WP6 adapts one onto the other when it wires the artifact manager.
+Provider compatibility is checked here when `available_providers` is given; task-family support
+(DESIGN.md §9 step 4) reaches it as a `validators` entry, because the families live in
+`engine/` (WP4a). A signature is verified whenever it is present and its `keyId` is trusted, and
+`signing_required` additionally makes the signature and a trusted key mandatory.
+
+`tools/make_bundle.py`: `python tools/make_bundle.py <dir> --out <file.tar[.gz]> [--key
+<ed25519-private.pem>] [--key-id <id>] [--key-password <pass>] [--gzip] [--schema <path>]`
+computes per-file digests into `manifest.json` (merging an author-supplied `manifest.json`),
+validates it, writes `manifest.sig`, packs the archive with fixed member metadata so the digest
+is reproducible, and prints the tarball digest. `--gen-key <path>` creates an Ed25519 keypair:
+the private PEM, `<path>.pub.pem`, and the raw 32-byte `<path>.pub`. Importable functions
+(`make_bundle`, `build_manifest_document`, `collect_files`, `generate_key_files`, `main`) back
+the CLI so tests and WP7 call it directly.
 
 ## 5. `ledger/` and `completion/` (WP3)
 
