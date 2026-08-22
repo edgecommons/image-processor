@@ -324,3 +324,6 @@ logs/
 *.zip
 ### Do Not Ignore GG Zip File
 
+
+# Agent worktrees and session files
+.claude/
