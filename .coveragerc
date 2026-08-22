@@ -22,3 +22,9 @@ exclude_lines =
     pragma: no cover
     if __name__ == .__main__.:
     raise NotImplementedError
+
+# WP5 (sources): image_processor/sources/ is covered in full by tests/sources/. Its only
+# `# pragma: no cover` marks are the two `if TYPE_CHECKING:` import blocks and
+# `spool._default_observer_factory`, which constructs a live `watchdog` observer -- the real OS
+# notification seam. Tests inject a fake observer through the same factory argument, so the
+# debounce loop, the nudge handler, and the periodic walk are all exercised.
