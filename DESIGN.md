@@ -46,6 +46,9 @@ decision rests on, checked on 2026-08-22.
 | D-IP-14 | **CI:** the full suite runs on `CPUExecutionProvider` in GitHub CI; a marked NVIDIA suite runs on lab hardware and is a release gate. | GitHub-hosted runners have no GPU. |
 | D-IP-15 | **Execution providers:** CUDA EP only in Phase 1. TensorRT EP is per-model opt-in in Phase 2, with engine/timing caches, a bounded engine-build scheduler, and "CUDA until the engine is ready". | Engines are GPU-class/driver/TensorRT-version specific and cost minutes per model; hundreds of models make unscheduled builds unbounded. |
 | D-IP-16 | **Trims and cross-repo fixes:** the Triton benchmark is dropped from Phase 0. file-replicator's archive/delete-failure-as-success is fixed in a separate Rust PR. | ONNX Runtime is the accepted runtime. An evidence pipeline cannot report success on a failed move. |
+| D-IP-17 | **Test corpus in four tiers** (§16): synthetic known-answer ONNX graphs and generated images in CI; permissively licensed real models (MobileNetV2, ResNet-50, YOLOX-Nano/S, SSD-MobileNetV1, DeepLabV3-MobileNetV3, anomalib PatchCore on VisA `capsules`) with Imagenette, a COCO val2017 slice, and VisA; a synthesized multi-bundle corpus for residency tests; camera-sim E2E. YOLOv8/YOLO11 (AGPL-3.0) and MVTec AD (CC BY-NC) are excluded. | Known answers make the CI suite deterministic and network-free; the real-model tier proves decode/pre/post chains; residency needs more bundles than fit in 8 GB, which real models cannot supply. License terms must be compatible with a BUSL product even for test use. |
+| D-IP-18 | **camera-adapter's `sim` backend gains a `playlist` pattern** that replays a directory of real images as captures with genuine sidecars and announcements. | The sim's synthetic patterns prove plumbing only; a true line-clearance E2E in the Dallas harness needs real imagery through the real camera path. Reusable by any future vision component. |
+| D-IP-19 | **The real-model tier runs nightly and on demand**, not per PR; golden results are committed as small JSON files; images and models are never committed (pinned-URL + SHA-256 asset manifest, cached under `tests/.cache/`). | Keeps per-PR CI fast and repository size bounded while still asserting parity against real models. |
 
 Residual facts verified on 2026-08-22 that shape the design: the Python core exposes candidate
 validators (validate-then-apply, reject-and-keep) and a post-apply listener but no prepared
@@ -560,15 +563,24 @@ unverified inference is `HOLD`.
 
 ## 16. Validation
 
+### 16.1 Test tiers and corpus (D-IP-17, D-IP-19)
+
+| Tier | Runs | Models | Images | Proves |
+|---|---|---|---|---|
+| 1 — CI suite | every PR, `CPUExecutionProvider`, no network, 90% line coverage | Synthetic ONNX graphs generated in-test with `onnx.helper`, fixed weights, one per task family: classification (conv → global pool → FC, class = dominant quadrant color), detection (fixed overlapping box set for decode + NMS), segmentation (threshold mask with derivable pixel counts), anomaly (mean-abs-diff against a baked reference). Deliberately bad bundles: unsupported head, wrong signature, tampered digest, oversized archive, path-traversal member, static vs dynamic batch axis. | Generated with Pillow/numpy: quadrant, gradient, and solid images with computable expected outputs; corrupt, truncated, zero-byte, decompression-bomb, wrong-extension, and 16-bit TIFF fixtures; camera-shaped fixtures (JPEG + `<image>.json` in the `ImageCaptured` body shape, written sidecar-first). Built by `tests/fixtures/build.py`; nothing binary is committed. | Task families, decision rules, lifecycle and kill-points, readiness modes, trigger path (inline ≤ 64 KiB and file reference), signing, outbox/confirm, completion and recovery. |
+| 2 — real models | nightly and on demand (`EC_LIVE_MODELS=1`); CPU in CI, GPU on lab | MobileNetV2 and ResNet-50 (ONNX Model Zoo, Apache-2.0); YOLOX-Nano/S (Apache-2.0) and SSD-MobileNetV1 (MIT); DeepLabV3-MobileNetV3 (torchvision export, BSD-3); anomalib PatchCore (Apache-2.0) trained on VisA `capsules`. Packed into signed bundles by `tools/make-bundle.py`. | Imagenette (Apache-2.0); a ~200-image COCO val2017 slice (annotations CC BY 4.0, images test-only and uncommitted); VisA `capsules` good/bad splits (CC BY 4.0). Pinned by `tests/assets.json` (URL + SHA-256), cached under `tests/.cache/`. | Real decode/preprocess/postprocess chains; provider-assignment recording; CPU↔CUDA parity within tolerance against committed JSON goldens (top-k labels, box IoU ≥ 0.9, anomaly AUROC threshold). |
+| 3 — residency and burst | GPU lab (RTX 5080 16 GB, RTX 2080 Super 8 GB), release gate (`EC_NVIDIA=1`) | Synthesized corpus: N distinct bundles from the MobileNetV2 and YOLOX-S architectures with perturbed weights and a padded initializer sizing them to ≈ 50 MB / 200 MB / 600 MB / 1.5 GB (for example 40 bundles, ≈ 20 GB against an 8 GB card). | Tier-2 corpora replayed at rate by the spool-writer fixture in camera format. | Cold load, warm inference, eviction, reload, recycle count, zero OOM, p50/p95/p99 queue and inference latency under uniform, Zipf-skewed, synchronized-burst, and scheduled-prefetch arrivals. These measurements set the Phase 0 SLOs. |
+| 4 — E2E | HOST (local EMQX + Docker), GREENGRASS on `lab-5950x` over real IPC, KUBERNETES (kind runner VM or lab k3s), Dallas harness | Per-camera line-clearance bundles: the VisA-capsules PatchCore anomaly model and a synthetic line-clearance classifier trained on procedurally rendered tray/conveyor scenes with and without foreign objects; each camera instance binds a distinct digest. | camera-adapter `sim` with the `playlist` pattern (D-IP-18) replaying VisA and the rendered scenes through the real camera path (sidecars, announcements). | Process-first topology end to end: readiness, hints, confirmed publish, archive/quarantine, evidence files, file-replicator replication, uns-bridge relay, edge-console; Greengrass and Kubernetes NVIDIA deployment. |
+
+### 16.2 Gates
+
 | Gate | Where |
 |---|---|
-| Unit and integration suite on `CPUExecutionProvider`, 90% line coverage | GitHub CI (`ci.yml`), every PR |
-| Kill-point tests after every durable transition; corrupt/oversized input and bundle tests; lost/duplicate hint and status-reconciliation tests; broker outage, outbox saturation, duplicate-publish tests; stage/activate/rollback, bad signature, last-known-good tests | GitHub CI |
-| NVIDIA suite: CUDA EP execution, multi-model residency, sustained churn without OOM, bounded recycle | Desktop RTX 5080 (WSL2) and `lab-5950x` RTX 2080 Super; release gate |
-| HOST E2E: camera-adapter → ImageProcessor → file-replicator, process-first | Local EMQX + Docker |
-| GREENGRASS deployed regression over real IPC | `lab-5950x` (RTX 2080 Super) |
-| KUBERNETES: NVIDIA device plugin, `nvidia.com/gpu` request, persistent cache volumes, shared spool volumes | kind runner VM or lab k3s |
-| Full-system UNS E2E | `bottling-company-test` (pharma-style scenario, Phase 3) |
+| Tier 1 suite, 90% line coverage | GitHub CI (`ci.yml`), every PR |
+| Kill-point tests after every durable transition; corrupt/oversized input and bundle tests; lost/duplicate hint and status-reconciliation tests; broker outage, outbox saturation, duplicate-publish tests; stage/activate/rollback, bad signature, last-known-good tests | GitHub CI (tier 1) |
+| Tier 2 real-model parity | GitHub CI nightly/on demand (CPU); lab GPU |
+| Tier 3 NVIDIA residency and burst | Desktop RTX 5080 (WSL2) and `lab-5950x` RTX 2080 Super; release gate |
+| Tier 4 HOST E2E, GREENGRASS deployed regression, KUBERNETES, full-system UNS E2E | Local EMQX + Docker; `lab-5950x`; kind/k3s; `bottling-company-test` |
 
 ## 17. Delivery phases
 
@@ -586,6 +598,7 @@ unverified inference is `HOLD`.
 |---|---|---|
 | Python template packaging (DEF-17) — PR #100 | `edgecommons/edgecommons` | Repo creation (done on the branch; merge pending) |
 | `app` channel allow-list in uplink policy | `edgecommons/uns-bridge` | Phase 3 site leg |
+| `sim` backend `playlist` pattern (replay a directory of real images as captures) | `edgecommons/camera-adapter` | Phase 1 tier-4 E2E (D-IP-18) |
 | Archive/delete failure recorded as retryable failure, not `Completed` | `edgecommons/file-replicator` | Phase 1 evidence correctness |
 | Pair-aware handoff, bundle manifest, replication receipt | `edgecommons/file-replicator` | Phase 4 evidence-first |
 | Content-addressed model assets, GPU resources, cache volumes in renderers | `edgecommons/edgecommons` (`ec-deploy`) | Phase 3 Deployment Studio rendering |
