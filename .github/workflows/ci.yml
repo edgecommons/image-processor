@@ -29,5 +29,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r requirements.txt pytest pytest-cov
+      # WP4a: requirements-test.txt carries `onnx`, which tests/fixtures/build.py needs to
+      # generate the tier-1 synthetic graphs. Without it the engine suite cannot run.
+      - run: pip install -r requirements.txt -r requirements-test.txt
       - run: pytest --cov=image_processor --cov-report=term-missing --cov-fail-under=90
