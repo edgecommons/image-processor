@@ -24,6 +24,7 @@ runs as a Greengrass v2 component, a standalone HOST process, or a Kubernetes po
 - **"What config option does X?"** → [Reference — Configuration](reference/configuration.md).
 - **"What message on which topic?"** → [Reference — Messaging Interface](reference/messaging-interface.md).
 - **"What does this metric mean?"** → [Reference — Metrics](reference/metrics.md).
+- **"What does a task family produce, and how do decision rules read it?"** → [Reference — Normalized output and decision rules](reference/data-types.md).
 - **"Why the self-echo guard? Why `get_messaging()` and not `data()`?"** → [Explanation](explanation.md).
 
 ## Audience

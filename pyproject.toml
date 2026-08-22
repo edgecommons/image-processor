@@ -24,10 +24,17 @@ dependencies = [
     # wire/bundle schemas at runtime, so jsonschema is a first-class runtime dependency here
     # rather than something inherited from the core library. WP2's manifest loader uses it too.
     "jsonschema>=4.21",
+    # WP4a -- engine: decode, task families, decision rules.
+    "numpy>=1.26",
+    "pillow>=10",
+    "jsonpath-ng>=1.6",
+    "onnxruntime>=1.17",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7", "pytest-cov"]
+# WP4a appends `onnx`: the fixture builder generates the synthetic graphs; the runtime never
+# imports it.
+test = ["pytest>=7", "pytest-cov", "onnx>=1.15"]
 # WP2 (bundles): `s3://` model sources. boto3 is never a hard dependency; without it an `s3://`
 # URI fails with BundleError("S3_UNAVAILABLE").
 s3 = ["boto3>=1.34"]

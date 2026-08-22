@@ -378,7 +378,11 @@ class TaskFamily(Protocol):
     def postprocess(self, outputs: dict[str, np.ndarray], m: BundleManifest, image_hw: tuple[int, int]) -> NormalizedOutput
 FAMILIES: dict[Family, TaskFamily]
 # decision.py
-def decide(normalized: NormalizedOutput, rules: dict) -> Decision      # rules: {"pass": "<jsonpath expr or comparison>", "confidence": "<jsonpath>", "threshold": float, "outcome": {...}}; unevaluable -> HOLD
+def decide(normalized: NormalizedOutput, rules: dict) -> Decision
+    # rules: {"pass": <expr>, "confidence": "<jsonpath>", "threshold": number|"<jsonpath>",
+    #         "outcomeOnPass": "CLEAR", "outcomeOnFail": "HOLD"|"FAIL", "failOnEmpty": bool}
+    # <expr> = {"path","op","value"} | {"all": [...]} | {"any": [...]}; ops >= > <= < == != exists absent count>=
+    # anything unevaluable, and any exception, -> HOLD (never CLEAR); grammar in docs/reference/data-types.md
 # protocol.py  (parent <-> cell messages; plain dataclasses, pickled over multiprocessing pipes)
 LoadModel(digest, bundle_root, providers, provider_policy, warmup: bool) -> Loaded(digest, providers_assigned, load_ms, device_mib) | LoadFailed(digest, error, error_class)
 Infer(inference_id, staged_path, sha256, digest, transform_version) -> InferenceResult
