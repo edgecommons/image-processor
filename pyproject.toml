@@ -21,7 +21,9 @@ dependencies = [
 test = ["pytest>=7", "pytest-cov"]
 
 [tool.setuptools]
-packages = ["image_processor"]
+# WP3: the ledger and completion subpackages ship with the component; a non-editable
+# install needs them listed explicitly alongside the top-level package.
+packages = ["image_processor", "image_processor.ledger", "image_processor.completion"]
 
 [tool.pytest.ini_options]
 # The package resolves from the repo root without an install (the CI/scaffold-build gate runs

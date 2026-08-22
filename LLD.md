@@ -195,43 +195,82 @@ creates an Ed25519 keypair.
 
 ```python
 class Ledger:
-    def __init__(self, path: Path, synchronous: str = "FULL"): ...     # WAL; one writer thread + queue; reads on a separate connection
-    def close(self) -> None
+    def __init__(self, path: Path, synchronous: str = "FULL", busy_timeout_ms: int = 5000,
+                 reserve_budget_bytes: int = 256 * 2**20, clock=_now_ms): ...
+        # WAL; one writer thread + queue; reads on a separate connection; foreign_keys ON
+    def close(self) -> None                                            # also a context manager
     # jobs
     def admit(self, job: Job, reserve_bytes: int) -> bool              # False when already present (same inference_id) or capacity reserve fails
+    def reserved_bytes(self) -> int
     def get(self, inference_id: str) -> Job | None
-    def transition(self, inference_id: str, expected: JobState, new: JobState, **fields) -> Job   # raises LedgerConflict if state != expected
+    def last_error(self, inference_id: str) -> str | None
+    def transition(self, inference_id: str, expected: JobState, new: JobState, **fields) -> Job
+        # raises LedgerConflict if state != expected, IllegalTransition if the edge is not in TRANSITIONS;
+        # **fields is limited to attempts, next_attempt_at_ms, staged_path, config_generation, last_error;
+        # a self-edge (new == expected) is allowed so a field-only update reuses the same gate
     def claimable(self, route_id: str | None, limit: int) -> list[Job]
     def by_state(self, states: Iterable[JobState], route_id: str | None = None, cursor: str | None = None, limit: int = 100) -> tuple[list[Job], str | None]
     # results + outbox (one transaction)
     def commit_result(self, inference_id: str, result_json: bytes, sidecar: tuple[str, str] | None, outbox: list[OutboxRow]) -> None
-    def pending_outbox(self, limit: int) -> list[OutboxRow]            # OutboxRow(id, inference_id, topic, encoded_bytes, attempts, gating: bool)
+        # INFERENCING -> RESULT_COMMITTED -> PUBLISH_PENDING (the second edge only when outbox rows exist)
+    def result_bytes(self, inference_id: str) -> bytes | None
+    def outbox_for(self, inference_id: str) -> list[OutboxRow]
+    def pending_outbox(self, limit: int) -> list[OutboxRow]            # OutboxRow(id, inference_id, topic, encoded_bytes, attempts, gating: bool, last_error); eligible only while the job is PUBLISH_PENDING
     def mark_published(self, outbox_id: int) -> None                   # when every gating row for the job is published -> job PUBLISHED
     def mark_publish_attempt(self, outbox_id: int, error: str) -> None
+    def exhaust_publish(self, inference_id: str) -> Job                # PUBLISH_PENDING -> PUBLISH_EXHAUSTED
+    def retry_publication(self, inference_id: str) -> Job              # PUBLISH_EXHAUSTED -> PUBLISH_PENDING; clears unpublished row attempts
     # cleanup
-    def record_cleanup_intent(self, intent: CleanupIntent) -> None
-    def complete_cleanup(self, inference_id: str, observed: str) -> None
-    def pending_cleanup(self, limit: int) -> list[CleanupIntent]
+    def record_cleanup_intent(self, intent: CleanupIntent) -> Job      # PUBLISHED|CLEANUP_FAILED -> CLEANUP_PENDING; INPUT_INVALID and PROCESSING_EXHAUSTED keep their state
+    def cleanup_intent(self, inference_id: str) -> CleanupIntent | None
+    def cleanup_observed(self, inference_id: str) -> str | None
+    def complete_cleanup(self, inference_id: str, observed: str) -> Job  # CLEANUP_PENDING -> COMPLETED, INPUT_INVALID -> QUARANTINED, PROCESSING_EXHAUSTED -> RETAINED_FAILED
+    def fail_cleanup(self, inference_id: str, error: str) -> Job       # CLEANUP_PENDING -> CLEANUP_FAILED; otherwise the state is kept with the error, never success
+    def pending_cleanup(self, limit: int) -> list[CleanupIntent]       # intents with no observed outcome
     # model generations
     def set_route_generation(self, route_id: str, desired: str, active: str | None) -> None
     def route_generation(self, route_id: str) -> tuple[str | None, str | None]
+    # key/value (WP5 reconciliation watermarks)
+    def kv_get(self, key: str) -> str | None
+    def kv_set(self, key: str, value: str | None) -> None
     # recovery
-    def recover(self) -> RecoveryReport                                # INFERENCING -> READY (same attempt), PUBLISH_PENDING retained, CLEANUP_PENDING -> reconcile list
+    def recover(self) -> RecoveryReport                                # INFERENCING -> READY (same attempt), CLAIMED/WAITING_MODEL -> READY, due RETRY_WAIT -> READY, PUBLISH_PENDING retained, CLEANUP_PENDING -> reconcile list
+    def requeue_for_reinference(self, inference_id: str, reason: str) -> Job
+        # DESIGN.md §7: a committed record whose sidecar is absent returns to re-inference;
+        # drops the result bytes, the result digest, the sidecar binding, and the outbox rows
 # completion/actions.py
 class Completer:
-    def __init__(self, ledger: Ledger, fs: FsOps = RealFs()): ...
+    def __init__(self, ledger: Ledger, fs: FsOps = RealFs(), on_collision: str = "fail", clock=_now_ms): ...
     def plan(self, job: Job, policy: CompletionPolicy, members: list[Path]) -> CleanupIntent
-    def apply(self, intent: CleanupIntent) -> None                     # intent persisted first; temp+rename; cross-fs copy+verify+remove; collision -> CLEANUP_FAILED
-    def reconcile(self, intent: CleanupIntent) -> JobState             # DESIGN.md §7 observed-state rules
+    def apply(self, intent: CleanupIntent, on_collision: str | None = None) -> None    # intent persisted first; temp+rename; cross-fs copy+verify+remove; collision -> CLEANUP_FAILED
+    def reconcile(self, intent: CleanupIntent, on_collision: str | None = None) -> JobState   # DESIGN.md §7 observed-state rules
 ```
 
+`TRANSITIONS` (`ledger/schema.py`) is the DESIGN.md §7 state diagram, edge for edge, and is the
+only place an edge is legal; `transition()` refuses anything else with `IllegalTransition`.
+`RECOVERY_EDGES` (`ledger/recovery.py`) is the separate, smaller table a restart uses, because
+recovery moves a job backwards along edges the forward lifecycle never takes: `INFERENCING`,
+`CLAIMED`, `WAITING_MODEL`, and a due `RETRY_WAIT` to `READY`, plus `RESULT_COMMITTED` and
+`PUBLISH_PENDING` to `READY` for `requeue_for_reinference`. `RecoveryReport` carries the count per
+edge, the open cleanup intents, the inference ids still eligible for the publisher, and the
+sidecar bindings of committed-but-uncleaned jobs so the caller can run the DESIGN.md §7 filesystem
+reconciliation.
+
+`CompletionPolicy` is a structural `Protocol` in `completion/actions.py` carrying `source_root`,
+`archive_dir`, `failed_dir`, `on_success`, `on_invalid_input`, `on_operational_failure`,
+`on_publish_failure`, and `on_collision`; WP1's `config.models.CompletionPolicy` dataclass
+satisfies it. `source_root` is the route's `source.root`, which completion needs to resolve an
+input's absolute path from `Job.source.relative_path`. Action values accept both the durable enum
+and the config spellings, including `retainInPlace`.
+
 Schema (`ledger/schema.py`): `jobs(inference_id PK, route_id, state, source_json, model_json,
-attempts, next_attempt_at_ms, staged_path, config_generation, result_sha256, sidecar_path,
-sidecar_sha256, created_at_ms, updated_at_ms)`, `outbox(id PK, inference_id, topic, payload BLOB,
-gating, attempts, last_error, published_at_ms)`, `cleanup_intents(inference_id PK, action,
-source_path, source_sha256, target_path, members_json, observed, created_at_ms)`,
-`route_generations(route_id PK, desired, active, updated_at_ms)`, `reservations(inference_id PK,
-bytes)`. Migrations: `CREATE TABLE IF NOT EXISTS` + a `meta(schema_version)` row.
+transform_version, attempts, next_attempt_at_ms, staged_path, config_generation, result_json,
+result_sha256, sidecar_path, sidecar_sha256, last_error, created_at_ms, updated_at_ms)`,
+`outbox(id PK, inference_id, topic, payload BLOB, gating, attempts, last_error, published_at_ms)`,
+`cleanup_intents(inference_id PK, action, source_path, source_sha256, target_path, members_json,
+observed, created_at_ms)`, `route_generations(route_id PK, desired, active, updated_at_ms)`,
+`reservations(inference_id PK, bytes)`, `kv(key PK, value)`. Migrations:
+`CREATE TABLE IF NOT EXISTS` + a `meta(schema_version)` row.
 
 ## 6. `engine/` (WP4a: decode, families, decision; WP4b: protocol, cell, supervisor, scheduler, residency)
 
