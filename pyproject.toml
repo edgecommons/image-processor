@@ -17,15 +17,21 @@ dependencies = [
     # TODO: add your component's own runtime dependencies here.
     # WP5 (sources): the spool source turns OS filesystem notifications into scan nudges.
     "watchdog>=3.0.0",
+    # WP2 (bundles): Ed25519 bundle signatures and model-bundle-manifest schema validation.
+    "cryptography>=42",
+    "jsonschema>=4.21",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=7", "pytest-cov"]
+# WP2 (bundles): `s3://` model sources. boto3 is never a hard dependency; without it an `s3://`
+# URI fails with BundleError("S3_UNAVAILABLE").
+s3 = ["boto3>=1.34"]
 
-[tool.setuptools]
-# WP3: the ledger and completion subpackages ship with the component; a non-editable
-# install needs them listed explicitly alongside the top-level package.
-packages = ["image_processor", "image_processor.ledger", "image_processor.completion"]
+[tool.setuptools.packages.find]
+# Every subpackage of image_processor ships in the wheel (the reusable CI and the Dockerfile
+# install from this manifest).
+include = ["image_processor*"]
 
 [tool.pytest.ini_options]
 # The package resolves from the repo root without an install (the CI/scaffold-build gate runs
