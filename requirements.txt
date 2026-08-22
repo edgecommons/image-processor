@@ -13,3 +13,8 @@ edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612
 # (`pip install .[s3]`), and without it an `s3://` URI fails with BundleError("S3_UNAVAILABLE").
 cryptography>=42
 jsonschema>=4.21
+# WP4a -- engine: decode, task families, decision rules.
+numpy>=1.26
+pillow>=10
+jsonpath-ng>=1.6
+onnxruntime>=1.17
