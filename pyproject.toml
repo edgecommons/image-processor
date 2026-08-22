@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "image-processor"
+version = "0.1.0"
+description = "Image inference processor: loads image-model bundles (ONNX Runtime, NVIDIA GPU), runs inference on finalized image files or subscription-triggered images, and publishes versioned inference results with evidence."
+requires-python = ">=3.9"
+dependencies = [
+    # The edgecommons Python library, in the same form as requirements.txt (the CLI substitutes
+    # the `--dep-source` you chose: a pinned git requirement for `registry`/`pinned-rev`, a
+    # `file://` reference to the sibling checkout for `local`). The org's component CI installs
+    # from this list (`pip install -e .`), so keep it in sync with requirements.txt -- bump both
+    # with `edgecommons component upgrade`.
+    "edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python",
+    # TODO: add your component's own runtime dependencies here.
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "pytest-cov"]
+
+[tool.setuptools]
+packages = ["image_processor"]
+
+[tool.pytest.ini_options]
+# The package resolves from the repo root without an install (the CI/scaffold-build gate runs
+# `python -m pytest`); `pip install -e .` also works.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

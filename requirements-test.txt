@@ -1,0 +1,4 @@
+# Test-only dependencies. The org's reusable component CI installs this file alongside the
+# package (`pip install -e . -r requirements-test.txt`); keep it to test tooling.
+pytest>=7
+pytest-cov

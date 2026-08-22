@@ -1,0 +1,24 @@
+# Coverage is scoped to the CI-testable surface, matching the org convention (edgecommons/AGENTS.md
+# validation matrix: "live-infra-only paths are validated on lab/HOST/GREENGRASS and excluded from
+# the unit gate; do not lower a gate or exclude testable code to pass — add tests"). The reference
+# component modbus-adapter scopes its 90% gate the same way.
+#
+# The payload-agnostic core (image_processor/pipeline.py: the stages, the tick, the self-echo guard, the route
+# parser) and the library-facing wiring's testable parts (route parsing in __init__, the inbound
+# handler's guard/count/drop, the dispatch restamp+publish, the metric flush, the connectivity
+# provider) are all unit-tested. Only the two live-runtime seams carry a `# pragma: no cover` at
+# their definition with an inline reason:
+#   - run():        subscribes over a real transport, spawns the worker threads, blocks until shutdown
+#   - _run_route(): the per-route worker's infinite queue-drain/tick loop
+# Both are exercised by the HOST/GREENGRASS smoke. Nothing testable is excluded.
+#
+# The ci.yml `coverage` job runs `pytest --cov=image_processor` from this directory, so coverage auto-discovers
+# this file; CI and a local `pytest` therefore apply the identical policy.
+[run]
+source = image_processor
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError

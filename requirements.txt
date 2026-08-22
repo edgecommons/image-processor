@@ -1,0 +1,9 @@
+psutil>=5.9.6
+awsiotsdk>=1.19.0
+awsiot>=0.1.3
+paho-mqtt>=2.0.0
+watchdog>=3.0.0
+# The edgecommons Python library. The CLI substitutes the dependency form you chose with
+# `--dep-source`: a pinned git requirement for `registry`, or an editable install of a local
+# sibling checkout for `local`. Bump it later with `edgecommons component upgrade --to <ver>`.
+edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python

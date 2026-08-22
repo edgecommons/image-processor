@@ -1,0 +1,105 @@
+RecipeFormatVersion: '2020-01-25'
+ComponentName: com.mbreissi.edgecommons.ImageProcessor
+ComponentVersion: 1.0.0
+ComponentDescription: Image inference processor: loads image-model bundles (ONNX Runtime, NVIDIA GPU), runs inference on finalized image files or subscription-triggered images, and publishes versioned inference results with evidence.
+ComponentPublisher: EdgeCommons
+ComponentDependencies:
+  aws.greengrass.TokenExchangeService:
+    VersionRequirement: '>=2.0.0'
+    DependencyType: HARD
+ComponentConfiguration:
+  DefaultConfiguration:
+    ComponentConfig:
+      logging:
+        level: INFO
+        python_format: '%(asctime)s [%(levelname)s] %(filename)s %(funcName)s(%(lineno)d) [%(threadName)s]:
+          %(message)s'
+      heartbeat:
+        enabled: true
+        intervalSecs: 5
+        destination: local
+        measures:
+          cpu: true
+          memory: true
+          disk: false
+      tags: {}
+      metricEmission:
+        target: cloudwatch
+        namespace: edgecommons
+        targetConfig:
+          intervalSecs: 10
+      component:
+        # UNS component token. The Greengrass ComponentName is reverse-DNS PascalCase; the token the
+        # wire carries is lower-kebab, so it is set explicitly rather than derived from the name.
+        token: image-processor
+        global:
+          defaults:
+            tickMs: 10000
+            maxQueue: 256
+        instances:
+        - id: rollup
+          subscribe:
+          - ecv1/+/+/+/data/#
+          publishTopic: ecv1/gw-01/image-processor/rollup/data/summary
+          target: local
+          pipeline:
+          - fieldEquals:
+              path: signal.id
+              value: temperature-1
+          - countPerTick: {}
+          tickMs: 10000
+    accessControl:
+      aws.greengrass.ipc.pubsub:
+        com.mbreissi.edgecommons.ImageProcessor:ipc:1:
+          policyDescription: Allows access to publish/subscribe to all topics on IPC
+          operations:
+          - aws.greengrass#PublishToTopic
+          - aws.greengrass#SubscribeToTopic
+          resources:
+          - '*'
+      aws.greengrass.ipc.mqttproxy:
+        com.mbreissi.edgecommons.ImageProcessor:iotcore:1:
+          policyDescription: Allows access to publish/subscribe to all topics on IoT Core.
+          operations:
+          - aws.greengrass#PublishToIoTCore
+          - aws.greengrass#SubscribeToIoTCore
+          resources:
+          - '*'
+      aws.greengrass.ShadowManager:
+        com.mbreissi.edgecommons.ImageProcessor:shadow:1:
+          policyDescription: Allows access to shadows.
+          operations:
+          - aws.greengrass#GetThingShadow
+          - aws.greengrass#UpdateThingShadow
+          - aws.greengrass#DeleteThingShadow
+          resources:
+          - '*'
+Manifests:
+- Platform:
+    os: all
+  Artifacts:
+  - URI: s3://BUCKET_NAME/COMPONENT_NAME/COMPONENT_VERSION/image-processor.zip
+    Unarchive: ZIP
+  Lifecycle:
+    install:
+      Script: 'set -e
+
+        COMPONENT_DIR="{work:path}"
+
+        python3 -m venv "$COMPONENT_DIR/venv"
+
+        . $COMPONENT_DIR/venv/bin/activate
+
+        pip3 install --upgrade pip
+
+        pip3 install -r {artifacts:decompressedPath}/image-processor/requirements.txt
+
+        deactivate'
+    Run:
+      Script: 'set -e
+
+        COMPONENT_DIR="{work:path}"
+
+        . $COMPONENT_DIR/venv/bin/activate
+
+        python3 -u {artifacts:decompressedPath}/image-processor/main.py --platform GREENGRASS'

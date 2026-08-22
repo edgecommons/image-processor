@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+jobs:
+  ci:
+    # Reusable component CI from the org defaults repo: build/test/lint for PYTHON.
+    permissions:
+      contents: read
+    uses: edgecommons/.github/.github/workflows/component-ci.yml@main
+    with:
+      language: PYTHON
+    secrets: inherit
+
+  coverage:
+    # The reusable workflow above builds/tests/lints but does not enforce the org's 90% line-coverage
+    # gate (edgecommons/AGENTS.md: "Coverage gate for CI-testable core code is 90% line coverage in
+    # all four languages... Do not lower a gate or exclude testable code to pass; add tests.").
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt pytest pytest-cov
+      - run: pytest --cov=image_processor --cov-report=term-missing --cov-fail-under=90

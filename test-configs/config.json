@@ -1,0 +1,53 @@
+{
+  "logging": {
+    "level": "INFO",
+    "python_format": "%(asctime)s [%(levelname)s] %(filename)s %(funcName)s(%(lineno)d) [%(threadName)s]: %(message)s"
+  },
+  "hierarchy": {
+    "levels": ["site", "device"]
+  },
+  "identity": {
+    "site": "factory-1"
+  },
+  "heartbeat": {
+    "enabled": true,
+    "intervalSecs": 5,
+    "measures": {
+      "cpu": true,
+      "memory": true
+    },
+    "destination": "local"
+  },
+  "metricEmission": {
+    "target": "log",
+    "namespace": "edgecommons",
+    "targetConfig": {
+      "logFileName": "{ComponentFullName}.metric.log"
+    }
+  },
+  "tags": {
+    "site": "factory-1"
+  },
+  "component": {
+    "token": "image-processor",
+    "global": {
+      "defaults": {
+        "tickMs": 10000,
+        "maxQueue": 256
+      }
+    },
+    "instances": [
+      {
+        "id": "rollup",
+        "subscribe": ["ecv1/+/+/+/data/#"],
+        "publishTopic": "ecv1/gw-01/image-processor/rollup/data/summary",
+        "target": "local",
+        "pipeline": [
+          { "fieldEquals": { "path": "signal.id", "value": "temperature-1" } },
+          { "countPerTick": {} }
+        ],
+        "tickMs": 10000
+      }
+    ]
+  }
+}

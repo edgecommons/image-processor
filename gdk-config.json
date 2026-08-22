@@ -1,0 +1,21 @@
+{
+  "component": {
+    "com.mbreissi.edgecommons.ImageProcessor": {
+      "author": "EdgeCommons",
+      "version": "NEXT_PATCH",
+      "build": {
+        "build_system": "zip"
+      },
+      "publish": {
+        "bucket": "edgecommons-set-artifact-bucket",
+        "region": "us-east-1"
+      },
+      "ignore": [
+        ".idea",
+        "test-configs/**",
+        "tests/**"
+      ]
+    }
+  },
+  "gdk_version": "1.6.2"
+}

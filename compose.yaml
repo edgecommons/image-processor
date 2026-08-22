@@ -1,0 +1,79 @@
+# HOST platform pack for ImageProcessor.
+#
+# Runs the component exactly the way the README's "Run locally (HOST platform, MQTT transport)"
+# section does — --platform HOST --transport MQTT <messaging config> -c FILE <config> -t <thing> —
+# but containerized, against a throw-away EMQX broker on the compose network.
+#
+#   docker compose up --build          # build the image (./Dockerfile) and start broker + component
+#   docker compose logs -f image-processor
+#   docker compose down -v
+#
+# Watch the route's input and output (the library publishes the state keepalive automatically):
+#   mosquitto_sub -h localhost -p 1883 -t 'ecv1/+/+/+/state' -t 'ecv1/+/+/+/data/#' -v
+#
+# Feed it something to process — anything matching the route's `subscribe` filter will do:
+#   mosquitto_pub -h localhost -p 1883 -t 'ecv1/gw-01/sim/main/data/temperature-1' \
+#     -m '{"header":{"name":"SouthboundSignalUpdate","version":"1.0"},"body":{"signal":{"id":"temperature-1"},"samples":[{"value":21.5}]}}'
+#
+# The device (thing) name defaults to image-processor-dev; override with THING_NAME=... docker compose up.
+name: image-processor
+
+services:
+  # Local MQTT broker — the HOST platform's `messaging.local` target.
+  emqx:
+    image: emqx/emqx:latest
+    container_name: image-processor-emqx
+    ports:
+      - "1883:1883"     # MQTT
+      - "18083:18083"   # EMQX dashboard (default login admin / public)
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  image-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile          # python:3.12-slim + requirements.txt, ENTRYPOINT python3 /app/main.py
+    image: image-processor:dev
+    container_name: image-processor
+    depends_on:
+      emqx:
+        condition: service_healthy
+    # Standard runtime CLI args, appended to the image's ENTRYPOINT.
+    command:
+      - "--platform"
+      - "HOST"
+      - "--transport"
+      - "MQTT"
+      - "/etc/edgecommons/standalone-messaging.json"
+      - "-c"
+      - "FILE"
+      - "/etc/edgecommons/test-configs/config.json"
+      - "-t"
+      - "${THING_NAME:-image-processor-dev}"
+    volumes:
+      # The component config source (-c FILE ...). Edit test-configs/ on the host and restart.
+      - ./test-configs:/etc/edgecommons/test-configs:ro
+    configs:
+      - source: messaging
+        target: /etc/edgecommons/standalone-messaging.json
+    restart: unless-stopped
+
+configs:
+  # The --transport MQTT messaging config. Kept inline (rather than reusing test-configs/standalone-messaging.json)
+  # because it must point at the `emqx` service on the compose network, not at localhost.
+  messaging:
+    content: |
+      {
+        "messaging": {
+          "local": {
+            "host": "emqx",
+            "port": 1883,
+            "clientId": "image-processor-local"
+          }
+        }
+      }

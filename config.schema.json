@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.edgecommons.mbreissi.com/schemas/ImageProcessor/config.schema.json",
+  "title": "ImageProcessor component configuration",
+  "description": "The configuration ImageProcessor itself understands: the object at `component.global`, with each entry of `component.instances[]` validated against `#/$defs/route`. A processor models ONE ROUTE PER INSTANCE — a set of topic filters, a pipeline of stages, and a target. The library envelope (logging, messaging, metricEmission, heartbeat, streaming, credentials, parameters, health, hierarchy, identity, topic, tags) is owned by the canonical schema and is deliberately not redeclared here. Keep `additionalProperties: false` so a typo'd key is caught at deploy time rather than silently ignored — `image_processor/pipeline.py` rejects an unknown route key at parse time for the same reason.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Defaults applied to every route that does not override them.",
+      "properties": {
+        "tickMs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10000,
+          "description": "How often stateful stages are ticked. A stage that emits on time rather than on arrival (a window, a batch, a debounce) produces its output on this cadence."
+        },
+        "maxQueue": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 256,
+          "description": "How many messages may be queued for a route before new ones are dropped and counted. Bounded on purpose: an unbounded queue does not remove backpressure, it relocates the failure to the heap."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "route": {
+      "title": "One route",
+      "description": "One entry of `component.instances[]`. Routes are independent — one thread each — so a slow route cannot stall another, and per-key state inside a stage needs no lock.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "publishTopic"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Unique route id. It is the `{instance}` token of this route's UNS topics and of the identity stamped on everything it publishes, so it must be a valid UNS token (lower-kebab)."
+        },
+        "subscribe": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Topic filters this route consumes. Wildcards are allowed.",
+          "examples": [["ecv1/+/+/+/data/#"]]
+        },
+        "publishTopic": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The topic the transformed result is published on. A processor is payload-agnostic and republishes onto a topic its config names — which is why it uses the raw get_messaging() surface rather than the data() facade, whose topic and body shape are its own."
+        },
+        "target": {
+          "enum": ["local", "northbound"],
+          "default": "local",
+          "description": "Where the result goes. `local` = the device-local bus. `northbound` = the northbound broker."
+        },
+        "pipeline": {
+          "type": "array",
+          "description": "The stages, in order. Each takes a message and returns zero or more messages, so a stage can filter, map, or fan out. An empty pipeline is a pass-through republisher.",
+          "items": { "$ref": "#/$defs/stage" }
+        },
+        "maxQueue": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Per-route override of the queue bound."
+        },
+        "tickMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Per-route override of the stage tick cadence."
+        }
+      }
+    },
+    "stage": {
+      "title": "One pipeline stage",
+      "description": "A single-key object naming the stage and its arguments. Add your own here as you register it in `image_processor/pipeline.py`'s stage table — the schema and that table are one contract.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "fieldEquals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "value"],
+          "description": "Keep only messages whose dotted body path equals a value; drop the rest.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "A dotted path into the message body, e.g. `signal.id`."
+            },
+            "value": {
+              "description": "The value the path must equal. Any JSON type."
+            }
+          }
+        },
+        "countPerTick": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Accumulate arrivals and emit one rollup per tick. The stateful half of the stage abstraction: it emits nothing on arrival and produces its output in `on_tick`. Windows, batches and debounces are all this shape."
+        }
+      }
+    }
+  }
+}
