@@ -15,6 +15,8 @@ dependencies = [
     # with `edgecommons component upgrade`.
     "edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python",
     # TODO: add your component's own runtime dependencies here.
+    # WP5 (sources): the spool source turns OS filesystem notifications into scan nudges.
+    "watchdog>=3.0.0",
 ]
 
 [project.optional-dependencies]

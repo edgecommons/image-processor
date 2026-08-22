@@ -318,25 +318,101 @@ eviction, priority + age weighting, single-flight load, no micro-batching (Phase
 ## 7. `sources/` (WP5)
 
 ```python
+# __init__.py    the events protocol + the configuration shapes the sources read
 class SourceEvents(Protocol):             # what a source reports to the app (WP6 implements)
     def discovered(self, route_id: str, source: SourceIdentity, staged_path: Path | None) -> None
     def invalid(self, route_id: str, relative_path: str, reason: str) -> None
+# Structural configuration protocols, field names exactly as DESIGN.md §11 spells them, so the
+# WP1 dataclasses satisfy them without importing anything from this package:
+#   RouteConfig(id, source); SpoolSourceConfig(root, include, exclude, readiness, camera)
+#   ReadinessConfig(mode, quietSecs, markerSuffix)
+#   CameraConfig(component, instance, subscribeAnnouncements, reconcileCaptureStatusSecs)
+#   TriggerSourceConfig(subscribe, fileRoot, inlineStaging, maxInlineBytes)
+# Read through staging.config_field(obj, *names, default=...): mapping or attribute access, camelCase
+# or snake_case, a null value counts as absent.
+
+# staging.py     processor-owned staging + the path/digest/config primitives the sources share
+lstat = os.lstat ; realpath = os.path.realpath        # seams: a test injects a reparse-point stat
+class SourceError(Exception): code: str               # StagingError | PathError | ConfigFieldError
+def config_field(source, *names, default=...) -> Any
+def sha256_bytes(data) -> str ; def sha256_file(path, chunk=1<<20) -> str
+def plain_digest(value) -> str                        # accepts "<hex>" or "sha256:<hex>"
+def stat_signature(path) -> tuple | None              # (size, mtime_ns); re-stat around every hash
+def classify_path(path) -> str | None                 # MISSING|SYMLINK|REPARSE_POINT|DIRECTORY|DEVICE_FILE|NOT_REGULAR_FILE
+def normalize_relative(value) -> str                  # forward slashes; rejects absolute/drive/".."
+def real_root(root) -> Path ; def relative_to_root(root, path) -> str
+def resolve_under_root(root, relative) -> Path        # realpath first, containment second
+def staged_path_for(staging_root, sha256, suffix="") -> Path      # <root>/<hex[:2]>/<hex><suffix>
+def stage_copy(src, staging_root, sha256) -> Path     # temp + fsync + verify + atomic install; idempotent
+def stage_bytes(data, staging_root, sha256, suffix="") -> Path    # the inline trigger's path onto disk
+
+# readiness.py
+@dataclass(frozen=True) class ReadyVerdict: ready: bool; identity: SourceIdentity | None; reason: str
+class ReadinessStrategy(Protocol): mode: str; def ready(self, path, relative_path) -> ReadyVerdict
+class CameraSidecarReadiness  # parses <image>.json, verifies image.bytes/sha256, returns the identity
+class CameraStatusReadiness   # ready only on a verified SUCCEEDED record; re-stats, does not re-hash
+class MarkerReadiness         # <path><suffix> exists; identity is None, the caller hashes
+class StabilityReadiness      # size+mtime still for quietSecs, injected clock; prune(keep)
+class Readiness:                                      # the rule one route uses
+    @staticmethod
+    def for_route(route, *, status_lookup=None, clock=time.monotonic) -> Readiness
+        # default mode: cameraSidecar when camera-bound, else stability
+        # raises ReadinessError: UNKNOWN_READINESS_MODE | STABILITY_NOT_PERMITTED_ON_CAMERA_ROUTE
+        #                      | CAMERA_STATUS_REQUIRES_RECONCILER | MARKER_SUFFIX_REQUIRED
+    mode: str ; strategy: ReadinessStrategy
+    def ready(self, path, relative_path) -> ReadyVerdict
+    def companion_suffixes(self) -> tuple                 # what the walk skips beside an image
+    def prune(self, keep) -> None
+def parse_timestamp_ms(value) -> int | None               # RFC 3339 as chrono writes it
+def read_sidecar(path) -> dict | None
+def verify_declared_image(path, image) -> tuple[int | None, str | None, str | None]
+def identity_from_capture(route_id, relative_path, document, size, sha256, kind=SPOOL) -> SourceIdentity
+
+# camera.py
+def capture_status_topic(device, component, instance=None) -> str   # .../cmd/sb/capture-status
+def image_captured_topic(device, component, instance) -> str        # .../app/image/captured
+@dataclass(frozen=True) class CaptureRecord: capture_id; relative_path; identity; signature; terminal_at_ms
+class CaptureStatusReconciler:
+    def __init__(self, *, route_id, root, topic, request, kv_get, kv_set, instance=None,
+                 interval_secs=30.0, page_limit=100, request_timeout_secs=10.0,
+                 on_verified=None, kv_key=None, clock=time.monotonic)
+        # request(topic, body, timeout_secs) -> reply ; kv_get/kv_set are the WP3 ledger KV
+    def poll_once(self) -> int      # List mode {"states":["SUCCEEDED"],...}, follows every nextCursor,
+                                    # dedupes by captureId, verifies file+digest, advances the watermark
+    def lookup(self, relative_path) -> CaptureRecord | None      # what CameraStatusReadiness calls
+    def lookup_capture(self, capture_id) -> dict | None          # Capture mode; None on CAPTURE_NOT_FOUND
+    def records(self) -> dict ; def start(self) ; def stop(self, timeout_s=5.0)
+
+# spool.py
+def compile_glob(pattern) -> re.Pattern   # ** crosses separators, "**/" also matches zero directories
 class SpoolSource:
-    def __init__(self, route: RouteConfig, events: SourceEvents, clock=time.monotonic): ...
-    def start(self) / stop(self)
-    def rescan(self) -> int                                             # authoritative scan; returns newly-ready count; also called by trigger-rescan
-    def on_hint(self, body: dict) -> None                               # ImageCaptured body: map relativePath, verify bytes/sha256
-class Readiness: strategies cameraSidecar | cameraStatus | marker | stability -> ready(path) -> ReadyVerdict(ready: bool, identity: SourceIdentity | None, reason)
-class CaptureStatusReconciler:            # pages sb/capture-status via gg.get_messaging() request/reply every reconcileCaptureStatusSecs; dedupe by captureId; watermark persisted via a small KV in the ledger (WP3 exposes kv_get/kv_set)
+    def __init__(self, route, events, clock=time.monotonic, *, status_lookup=None,
+                 observer_factory=None, debounce_secs=0.5, rescan_interval_secs=60.0)
+    def start(self) ; def stop(self, timeout_s=5.0) ; def nudge(self) -> None
+    def rescan(self) -> int         # authoritative walk; also the trigger-rescan command's path
+    def on_hint(self, body: dict) -> None       # ImageCaptured: relativePath under the root, never
+                                                # absolutePath; verifies bytes/sha256 = ready by proof
+    def prime(self, pairs) -> None  # seed the announced (relative_path, sha256) set from the ledger
+    def seen(self) -> set
+    # counters WP6 reports as ImageProcessorDiscovery: discovered_count, rejected_count, rescans,
+    # nudges, hints_accepted, hints_rejected, hints_unmapped
+
+# trigger.py
 class TriggerSource:
-    def __init__(self, route: RouteConfig, events: SourceEvents, staging: Path): ...
-    def on_message(self, message) -> None                               # inline (opaque or body["image"] bytes, ≤ 64 KiB) -> staging file; reference -> containment + sha256/bytes check
-    # reply correlation: events.discovered(...) carries correlation_id and reply_to via SourceIdentity/extra so WP6 can reply
-def stage_copy(src: Path, staging_root: Path, sha256: str) -> Path      # immutable processor-owned copy when the source fs gives no stable handle
+    def __init__(self, route, events, staging: Path | None = None, *, file_root=None,
+                 max_inline_bytes=None)          # both default from the route; the cap is clamped to 64 KiB
+    subscribe: tuple[str, ...]
+    def on_message(self, message) -> None
+        # "relativePath" in the body → reference: containment + bytes/sha256 verified + stage_copy
+        # otherwise → inline: opaque binary body, body["image"] bytes, or the core binary marker
+        # SourceIdentity carries correlation_id and reply_to so WP6 can answer the requester
+    accepted: int ; rejected: int
+def suffix_for(data) -> str ; def message_body(message) ; def request_correlation(message) -> tuple
 ```
 
 Spool discovery uses `watchdog` observers feeding a debounced scan queue; `rescan()` is the
-authoritative path and the watchdog only nudges it.
+authoritative path and the watchdog only nudges it. A periodic interval nudges it as well, so a
+dropped notification costs latency and never a job.
 
 ## 8. `outputs/`, wiring, commands, metrics, health (WP6)
 
