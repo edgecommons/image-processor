@@ -15,13 +15,25 @@ dependencies = [
     # with `edgecommons component upgrade`.
     "edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python",
     # TODO: add your component's own runtime dependencies here.
+    # WP4a -- engine: decode, task families, decision rules.
+    "numpy>=1.26",
+    "pillow>=10",
+    "jsonpath-ng>=1.6",
+    "onnxruntime>=1.17",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7", "pytest-cov"]
+# WP4a appends `onnx`: the fixture builder generates the synthetic graphs; the runtime never
+# imports it.
+test = ["pytest>=7", "pytest-cov", "onnx>=1.15"]
 
 [tool.setuptools]
-packages = ["image_processor"]
+packages = [
+    "image_processor",
+    # WP4a
+    "image_processor.engine",
+    "image_processor.engine.families",
+]
 
 [tool.pytest.ini_options]
 # The package resolves from the repo root without an install (the CI/scaffold-build gate runs

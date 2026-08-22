@@ -2,3 +2,7 @@
 # package (`pip install -e . -r requirements-test.txt`); keep it to test tooling.
 pytest>=7
 pytest-cov
+
+# WP4a -- the synthetic-graph fixture builder (tests/fixtures/build.py). Test-only: the
+# runtime imports onnxruntime, never onnx.
+onnx>=1.15

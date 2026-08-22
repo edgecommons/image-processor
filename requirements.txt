@@ -7,3 +7,9 @@ watchdog>=3.0.0
 # `--dep-source`: a pinned git requirement for `registry`, or an editable install of a local
 # sibling checkout for `local`. Bump it later with `edgecommons component upgrade --to <ver>`.
 edgecommons @ git+https://github.com/edgecommons/edgecommons@8e688894845152de612abe39e04c9e07d3f183c5#subdirectory=libs/python
+
+# WP4a -- engine: decode, task families, decision rules.
+numpy>=1.26
+pillow>=10
+jsonpath-ng>=1.6
+onnxruntime>=1.17
