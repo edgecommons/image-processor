@@ -28,3 +28,11 @@ exclude_lines =
 # `spool._default_observer_factory`, which constructs a live `watchdog` observer -- the real OS
 # notification seam. Tests inject a fake observer through the same factory argument, so the
 # debounce loop, the nudge handler, and the periodic walk are all exercised.
+
+# WP4b (engine): image_processor/engine/{protocol,cell,cell_main,supervisor,residency,scheduler}.py
+# are covered by tests/engine/ at 97-100% each. The `# pragma: no cover` marks are all live seams
+# with an inline reason: `cell_main.cell_entrypoint` (the spawned child's first frame -- the
+# handlers and the request loop it calls are covered in process), the NVML readings in
+# `residency.NvmlProbe` (no GPU in CI; covered by the EC_NVIDIA suite), the runtime device lookup
+# in `CellState.device_class`, and the kill-a-wedged-child and close-a-closed-pipe branches in
+# `cell.py`. Nothing testable is excluded.
