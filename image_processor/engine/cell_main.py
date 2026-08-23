@@ -103,6 +103,16 @@ def onnxruntime_module():
     if _ORT is None:
         import onnxruntime
 
+        # onnxruntime-gpu finds CUDA, cuBLAS, and cuDNN through the NVIDIA pip packages only after
+        # ``preload_dlls()`` has loaded them into this process; without it the CUDA provider
+        # library fails to load and the session silently lands on CPU -- which the provider-policy
+        # gate then refuses (PROVIDER_CPU_ONLY). A CPU-only wheel has no such function.
+        preload = getattr(onnxruntime, "preload_dlls", None)
+        if preload is not None:
+            try:
+                preload()
+            except Exception as error:  # noqa: BLE001 - a missing library is reported at load time
+                logger.debug("onnxruntime.preload_dlls failed: %s", error)
         _ORT = onnxruntime
     return _ORT
 

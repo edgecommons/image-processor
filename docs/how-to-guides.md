@@ -333,3 +333,21 @@ rules — never to make a failing comparison pass.
    outcome is a behavior change, and the diff is where you see it.
 
 The same thing happens inside pytest with `--update-goldens`, which is what the tool passes through.
+
+## Run on an NVIDIA GPU
+
+The `gpu` and `nvml` extras install `onnxruntime-gpu` and the NVML bindings. `onnxruntime-gpu`
+links against a specific CUDA major version (1.29 links against CUDA 13), and the matching runtime
+libraries install from PyPI, so no system CUDA toolkit is required. The executor cell preloads
+these libraries before it creates a session.
+
+1. Create a Linux (or WSL2) virtual environment with Python 3.12:
+   `uv venv --python 3.12 ~/ip-gpu-venv && source ~/ip-gpu-venv/bin/activate`
+2. Install the component with the GPU extras and the CUDA 13 runtime:
+   `pip install -e '.[gpu,nvml]' 'nvidia-cuda-runtime==13.*' 'nvidia-cublas==13.*' 'nvidia-cuda-nvrtc==13.*' 'nvidia-cufft==12.*' 'nvidia-curand==10.*' nvidia-cudnn-cu13 'nvidia-nvjitlink==13.*'`
+3. Confirm the provider: `python -c "import onnxruntime as o; o.preload_dlls(); print(o.get_available_providers())"`
+   lists `CUDAExecutionProvider`.
+4. Run the NVIDIA suite: `EC_NVIDIA=1 python -m pytest tests/engine/test_nvidia.py -o addopts="" -q`.
+
+A route whose `runtime.requiredProvider` is `CUDAExecutionProvider` refuses to run when the session
+lands on CPU (`PROVIDER_CPU_ONLY`); the result's `model.providers` always names the actual assignment.
