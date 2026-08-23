@@ -32,6 +32,7 @@ image_processor/
     __init__.py  result.py  publisher.py  mirror.py  sidecar.py  events.py
   completion/              archive/delete/retain/quarantine with intents (WP3)
     __init__.py  actions.py
+  artifacts.py             model staging, warmup, route-generation activation (WP6)
   commands.py  metrics.py  health.py  connectivity.py          (WP6)
 schemas/
   inference-result.schema.json      (WP1)
@@ -622,17 +623,121 @@ dropped notification costs latency and never a job.
 
 ```python
 # outputs/result.py
-def build_result_body(job: Job, result: InferenceResult, manifest: BundleManifest, artifacts: dict | None, limits) -> dict   # validates against schemas/inference-result.schema.json
+RESULT_MESSAGE_NAME = "ImageInferenceResult" ; RESULT_CHANNEL = "inference/result"
+class ResultError(Exception): code; message
+@dataclass(frozen=True) class ResultLimits: max_items = 100; max_body_bytes = 32768
+def build_result_body(job, result, manifest=None, artifacts=None, limits=None, *, validate=True) -> dict
+    # DESIGN.md 12.1; `limits=None` builds the full result (what the sidecar carries), a limits
+    # value bounds the collections and sets outputs.truncated, which the schema accepts only
+    # alongside `artifacts` -- so a bounded body with no evidence raises EVIDENCE_REQUIRED
+def validate_result_body(body) -> None      # jsonschema against schemas/inference-result.schema.json
+def body_bytes(body) -> bytes ; def fits_budget(body, limits) -> bool
+def split_error(error) -> (code, message)   # the executor's "CODE: detail" string
+# outputs/sidecar.py
+SIDECAR_SUFFIX = ".inference.json" ; fsync = os.fsync ; replace = os.replace   # seams for a fault test
+@dataclass(frozen=True) class InstalledSidecar: path; sha256; bytes
+def sidecar_path_for(image_path) -> Path
+def sidecar_document(job, body, *, evidence_id, config_generation=0, manifest=None, written_at_ms=None) -> dict
+def write_sidecar(path, document, *, durable=True) -> InstalledSidecar
+    # temp -> flush -> atomic install -> directory flush; an identical sidecar is adopted, a
+    # different one raises SIDECAR_COLLISION (evidence is never overwritten)
 # outputs/publisher.py
-class OutboxPublisher:                     # drains ledger.pending_outbox via gg.instance(route).app().publish_confirmed(PreparedAppMessage(topic, bytes)) with timeout; marks published/attempt
-# outputs/mirror.py     DecisionMirror.publish(route_id, decision_signals, result_body) via gg.instance(route).data()
-# outputs/sidecar.py    write_sidecar(path, body) -> sha256 ; temp + fsync + atomic install
-# outputs/events.py     typed helpers over gg.instance(route).evt()
-# ImageProcessor.py     class ImageProcessor(gg): run()/stop(); builds config -> ledger -> cache -> supervisor -> scheduler -> sources -> publisher -> completer; the result pipeline: on_result -> sidecar -> ledger.commit_result (+ outbox rows) -> publisher -> completer; artifact manager thread (stage models[] -> warmup via cell -> route generation switch)
-# commands.py           registers DESIGN.md §13 verbs with CommandInbox.register_outcome
-# metrics.py            MetricBuilder groups per DESIGN.md §12.3, flushed on an interval
-# health.py / connectivity.py   readiness rules §14; InstanceConnectivity per route for gg.set_instance_connectivity_provider
+class OutboxPublisher:
+    def __init__(self, ledger, publish, *, timeout_secs=10.0, max_attempts=100, batch=32,
+                 poll_interval_s=0.5, on_published=None, on_exhausted=None, on_error=None)
+        # publish(topic, encoded_bytes, timeout_secs) raises on anything but confirmation
+    def drain_once() -> int ; def pending() -> int ; def wake() ; def start() ; def stop(timeout_s)
+    # a pass stops at the first failure, so one outage costs one attempt per job, not per row
+# outputs/mirror.py
+class DecisionMirror: def publish(route_id, decision_signals, result_body) -> int   # instance(route).data()
+# outputs/events.py
+EVENT_TYPES ; class RouteEvents:
+    def emit(route_id, type, message, context=None, severity=WARNING) -> bool
+    def alarm(route_id, type, active, ...) -> bool       # publishes only on a transition
+    # plus one typed helper per DESIGN.md 12.3 condition; route_id None is component scope
+# artifacts.py          the model artifact manager (DESIGN.md 9)
+class ArtifactError(Exception): code; message
+def family_validator(manifest) -> None       # the engine/families check stage_bundle injects
+class ArtifactManager:
+    def __init__(self, config, cache, ledger, supervisor=None, *, trusted_keys=None, credentials=None,
+                 events=None, metrics=None, on_activated=None, interval_secs=30.0,
+                 retry_backoff_secs=60.0, warmup_timeout_s=600.0, clock=time.monotonic)
+    def stage(entry) -> CachedBundle ; def warm(entry, bundle) -> None       # LoadModel(warmup=True)
+    def reconcile(route_ids=None, *, force=False) -> int    # desired -> STAGING -> warm -> active
+    def rollback(route_id) ; def pinned() -> tuple ; def collect() -> tuple ; def status() -> list
+    def adopt(config) ; def start() ; def stop(timeout_s) ; def wake()
+# connectivity.py
+@dataclass(frozen=True) class RouteStatus: route_id, enabled, paused, source_reachable, source_detail,
+    desired_generation, active_generation, executor_healthy, queued, oldest_age_secs, last_error;
+    .staging, .connected, .state -> ONLINE | STAGING | DEGRADED | DISABLED
+def route_connectivity(status) -> InstanceConnectivity
+class ConnectivityProvider: def __call__() -> list        # gg.set_instance_connectivity_provider
+# health.py
+@dataclass(frozen=True) class HealthReport: ready; failed; reasons; degraded_routes
+class Health:                                   # DESIGN.md 14; every input is a callable
+    def __init__(self, *, statuses, state_writable, cache_verified, outbox_pending, outbox_capacity,
+                 requires_executor, executor_healthy, backlog_fraction=1.0)
+    def evaluate() -> HealthReport ; def apply(gg) -> HealthReport
+# metrics.py
+METRIC_GROUPS: dict[str, tuple[(measure, unit)]]   # the eight DESIGN.md 12.3 groups
+AVERAGED: frozenset                                # measures reported as an interval mean
+class ProcessorMetrics:
+    def __init__(self, gg, *, interval_secs=60, gauges=None)
+    def define() ; def incr(group, measure, value=1.0) ; def observe(group, measure, value)
+    def snapshot() -> dict ; def flush() -> int ; def start() ; def stop(timeout_s)
+# commands.py
+VERB_SCOPES: dict[str, CommandScope]               # the DESIGN.md 13 verbs
+class DeferredApp: def bind(app)                   # verbs register before the component exists
+class ProcessorCommands:
+    def __init__(self, app, *, defer_secs=1860.0) ; def register(inbox)   # register_outcome per verb
+    # one method per verb; a slow verb takes inbox.defer() and settles in a post-accept continuation
+def request_body(request) -> dict ; def page_size(body) -> int ; def cursor_of(body) -> str | None
+# ImageProcessor.py     the wiring and the result pipeline
+@dataclass class RouteRuntime: route; source; reconciler; topics; paused; override; last_error
+class ImageProcessor(ConfigurationChangeListener):
+    def __init__(self, gg, limits=None)   # parse config -> resolve its own $secret refs -> ledger,
+        # cache, supervisor, residency, scheduler(on_result=self._on_result), publisher, completer,
+        # artifacts, mirror, events, metrics, health, commands; registers the connectivity provider
+    def run() -> None      # metrics.define -> supervisor.start -> recover -> artifacts.reconcile ->
+        # start routes -> scheduler -> publisher -> artifacts thread -> metrics -> resubmit -> ready
+    def stop() -> None     # sources -> artifacts -> scheduler -> publisher -> metrics -> cells -> ledger
+    def discovered(route_id, source, staged_path) / def invalid(route_id, relative_path, reason)
+        # the sources.SourceEvents contract; `invalid` quarantines a refused spool file under the
+        # route's onInvalidInput policy, which needs its digest, so the file is hashed first
+    def on_configuration_change(configuration) -> bool    # add/remove/rebuild routes, keep the ledger
+    def route_statuses() -> list[RouteStatus]
+    # the command surface ProcessorCommands calls: route_ids, list_models, list_jobs, job_counts,
+    # scheduler_summary, rescan, preload_model, evict_model, reload_model_catalog,
+    # set_activation_override, retry_publication, retry_cleanup, reconcile, pause, resume
 ```
+
+The result pipeline, in the order DESIGN.md 7 fixes: `_on_result` -> `build_result_body` (full) ->
+`write_sidecar` when the route writes evidence *or* the bounded body would need it ->
+`build_result_body` (bounded, with `artifacts`) -> `app().prepare()` -> `ledger.commit_result`
+(result bytes, sidecar digest, one gating `OutboxRow`) -> `publisher.wake()` -> the decision mirror
+and the correlated reply -> and, when the publisher confirms the gating row, `Completer.plan/apply`
+under `route.completion_for(job.source.kind)`. A terminal failure takes the same body builder, is
+published directly (the ledger accepts a committed result only from an in-flight job), and takes
+the failure completion -- with `onInvalidInput` rather than `onOperationalFailure` when the error
+class is `permanent`, which is what `schemas/inference-result.schema.json` says that class means.
+A route with no `failedDir` quarantines in place, which is a retain with the terminal state
+recorded against it (DESIGN.md 11).
+
+Four interfaces WP6 added to packages it does not own, each in the package that owns the state it
+reads: `Scheduler.evict(digest)` (the `evict-model` verb, refusing a leased generation),
+`decision.resolve_path(document, path, default)` (the mirror, keeping `jsonpath-ng` in `engine/`),
+`Ledger.counts_by_state` / `Ledger.oldest_created_at_ms` (`get-queue`, the queue metrics and
+condition, the per-route connectivity), and `SpoolSource.forget(pairs=None)`
+(`reprocessExistingOnModelChange`). WP1's `gpu.devices` also accepts an explicit empty list, which
+is the CPU-only development path the supervisor already implemented and the schema could not
+express.
+
+Three places where the as-built surface differs from the interface sketched before implementation:
+`write_sidecar` returns an `InstalledSidecar` rather than a digest, because the published
+`artifacts` block needs the size as well; `OutboxPublisher` takes a `publish` callable rather than
+reaching for the facade itself, because the exact-bytes contract is the app's to satisfy and a test
+has to be able to fail it; and the artifact manager is its own module rather than a thread inside
+`ImageProcessor.py`, because staging, warmup, and activation are testable on their own.
 
 ## 9. Work packages and ownership
 

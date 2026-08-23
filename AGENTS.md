@@ -32,7 +32,9 @@ and `completion/` (SQLite job ledger, outbox, cleanup intents, recovery, archive
 quarantine), `engine/` (decode, task families, decision rules, executor cells, supervisor,
 scheduler, residency), `sources/` (spool discovery, readiness, camera hint/status, trigger
 subscription), `outputs/` (result, confirmed outbox publisher, decision mirror, sidecar, events),
-`ImageProcessor.py` (wiring), `schemas/` (wire and bundle contracts), `tools/` (bundle authoring,
+`artifacts.py` (model staging, warmup, route-generation activation), `ImageProcessor.py` (the
+wiring and the result pipeline), `commands.py` / `metrics.py` / `health.py` / `connectivity.py`
+(the operator surfaces), `schemas/` (wire and bundle contracts), `tools/` (bundle authoring,
 test-asset fetch), `tests/` (fixtures builder, goldens, suites).
 
 ## Non-negotiable invariants (do not remove)
