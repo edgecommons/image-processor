@@ -342,6 +342,12 @@ def _check_provider_policy(config: ComponentConfig) -> None:
             f"runtime.requiredProvider '{runtime.required_provider}' is not in runtime.providers",
         )
     cpu = "CPUExecutionProvider"
+    if not config.gpu.devices and not runtime.allow_cpu_only:
+        raise ConfigError(
+            "PROVIDER_POLICY_UNSATISFIED",
+            "gpu.devices is empty, which is the CPU-only development path and needs "
+            "runtime.allowCpuOnly; a deployment that serves decisions names its devices",
+        )
     if not runtime.allow_cpu_only:
         if tuple(runtime.providers) == (cpu,):
             raise ConfigError(
