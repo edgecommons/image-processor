@@ -665,7 +665,10 @@ class ArtifactManager:
     def __init__(self, config, cache, ledger, supervisor=None, *, trusted_keys=None, credentials=None,
                  events=None, metrics=None, on_activated=None, interval_secs=30.0,
                  retry_backoff_secs=60.0, warmup_timeout_s=600.0, clock=time.monotonic)
-    def stage(entry) -> CachedBundle ; def warm(entry, bundle) -> None       # LoadModel(warmup=True)
+    def stage(entry) -> CachedBundle ; def warm(entry, bundle) -> Loaded
+        # LoadModel(warmup=True) then Unload on the same cell: warmup proves loadability, the
+        # scheduler owns residency. The reply's load_ms/device_mib/warmup_samples land on the
+        # GenerationState and are what `get-models` reports.
     def reconcile(route_ids=None, *, force=False) -> int    # desired -> STAGING -> warm -> active
     def rollback(route_id) ; def pinned() -> tuple ; def collect() -> tuple ; def status() -> list
     def adopt(config) ; def start() ; def stop(timeout_s) ; def wake()

@@ -7,7 +7,7 @@ import pytest
 from image_processor.artifacts import ArtifactError, ArtifactManager, family_validator
 from image_processor.bundles import BundleCache
 from image_processor.config import parse_component_config
-from image_processor.engine.protocol import LoadFailed, Loaded
+from image_processor.engine.protocol import LoadFailed, Loaded, LoadModel, Unload, Unloaded
 from image_processor.ledger import Ledger
 from image_processor.outputs.events import RouteEvents
 from tests.wiring.conftest import FakeGg, config_document
@@ -30,9 +30,10 @@ class FakeCell:
 class FakeSupervisor:
     """A supervisor whose cells answer with a scripted reply."""
 
-    def __init__(self, replies=None, cells=None) -> None:
+    def __init__(self, replies=None, cells=None, unloads=None) -> None:
         self._cells = cells if cells is not None else [FakeCell()]
         self.replies = list(replies or [])
+        self.unloads = list(unloads or [])
         self.calls: list = []
 
     def cells(self) -> list:
@@ -40,10 +41,17 @@ class FakeSupervisor:
         return list(self._cells)
 
     def call(self, cell, message, timeout_s=None):
-        """Answer one call with the next scripted reply."""
+        """Answer one call with the next scripted reply.
+
+        An ``Unload`` is answered from ``unloads`` rather than from ``replies``, so a test that
+        scripts a load reply does not have it eaten by the release that follows a warmup.
+        """
         cell.loads.append(message)
         self.calls.append((cell.cell_id, message))
-        reply = self.replies.pop(0) if self.replies else _loaded(message.digest)
+        if isinstance(message, Unload):
+            reply = self.unloads.pop(0) if self.unloads else Unloaded(message.digest, freed_mib=0)
+        else:
+            reply = self.replies.pop(0) if self.replies else _loaded(message.digest)
         if isinstance(reply, Exception):
             raise reply
         return reply
@@ -58,6 +66,11 @@ def _loaded(digest: str) -> Loaded:
         device_mib=0,
         warmup_samples=2,
     )
+
+
+def _loads(supervisor) -> list:
+    """The load requests one supervisor answered, without the releases that follow them."""
+    return [message for _cell, message in supervisor.calls if isinstance(message, LoadModel)]
 
 
 @pytest.fixture
@@ -123,6 +136,59 @@ def test_activation_switches_the_route_generation_only_after_warmup(parts):
     assert manager.counters["activated"] == 1
 
 
+def test_a_warmed_session_is_released_so_the_scheduler_owns_residency(parts):
+    """Warmup proves the bundle loads; it does not claim GPU memory (DESIGN.md 10.2)."""
+    config, cache, ledger = parts
+    supervisor = FakeSupervisor()
+    manager = ArtifactManager(config, cache, ledger, supervisor)
+
+    assert manager.reconcile() == 1
+
+    digest = config.models[0].digest
+    sent = [message for _cell, message in supervisor.calls]
+    assert [type(message).__name__ for message in sent] == ["LoadModel", "Unload"]
+    assert sent[0].warmup is True and sent[0].digest == digest
+    assert sent[1].digest == digest
+    assert supervisor.calls[0][0] == supervisor.calls[1][0], "released on the cell that built it"
+
+
+def test_the_warmup_measurements_outlive_the_session_it_measured(parts):
+    """`get-models` and later admission read what the load cost, not the session itself."""
+    config, cache, ledger = parts
+    supervisor = FakeSupervisor(
+        replies=[
+            Loaded(
+                digest=config.models[0].digest,
+                providers_assigned=("CPUExecutionProvider",),
+                load_ms=41.5,
+                device_mib=384,
+                warmup_samples=1,
+            )
+        ]
+    )
+    manager = ArtifactManager(config, cache, ledger, supervisor)
+
+    manager.reconcile()
+
+    entry = manager.status()[0]
+    assert entry["warmed"] is True
+    assert entry["warmupSamples"] == 1
+    assert entry["loadMs"] == 41.5
+    assert entry["deviceMiB"] == 384
+
+
+def test_a_release_that_fails_does_not_fail_the_activation(parts):
+    """The bundle already proved it loads; a stuck session is the supervisor's problem."""
+    config, cache, ledger = parts
+    supervisor = FakeSupervisor(unloads=[RuntimeError("the cell stopped answering")])
+    manager = ArtifactManager(config, cache, ledger, supervisor)
+
+    assert manager.reconcile() == 1
+
+    digest = config.models[0].digest
+    assert ledger.route_generation("clearance-cam-01") == (digest, digest)
+
+
 def test_a_second_pass_changes_nothing(parts):
     config, cache, ledger = parts
     manager = ArtifactManager(config, cache, ledger, FakeSupervisor())
@@ -182,13 +248,13 @@ def test_a_failed_generation_backs_off_before_it_is_tried_again(parts):
     )
 
     manager.reconcile()
-    assert len(supervisor.calls) == 1
+    assert len(_loads(supervisor)) == 1
 
     manager.reconcile()
-    assert len(supervisor.calls) == 1, "the backoff has not elapsed"
+    assert len(_loads(supervisor)) == 1, "the backoff has not elapsed"
 
     manager.reconcile()
-    assert len(supervisor.calls) == 2, "past the backoff it is tried again"
+    assert len(_loads(supervisor)) == 2, "past the backoff it is tried again"
 
 
 def test_forcing_a_pass_ignores_the_backoff(parts):
@@ -199,7 +265,7 @@ def test_forcing_a_pass_ignores_the_backoff(parts):
 
     manager.reconcile(force=True)
 
-    assert len(supervisor.calls) == 2
+    assert len(_loads(supervisor)) == 2
 
 
 def test_no_executor_at_all_is_reported_rather_than_assumed(parts):
@@ -221,7 +287,7 @@ def test_a_dead_cell_is_skipped_and_a_live_one_answers(parts):
     manager.warm(config.models[0], manager.stage(config.models[0]))
 
     assert dead.loads == []
-    assert len(live.loads) == 1
+    assert [type(message).__name__ for message in live.loads] == ["LoadModel", "Unload"]
 
 
 def test_the_pins_keep_every_generation_a_route_could_still_need(parts):

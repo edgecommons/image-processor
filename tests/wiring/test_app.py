@@ -48,6 +48,26 @@ def test_readiness_is_claimed_only_once_a_route_can_decide(app, gg):
     assert gg.ready[-1] is True
 
 
+def test_warmup_leaves_no_session_behind_and_the_scheduler_loads_the_first_job(
+    running, home, corpus
+):
+    """The residency map is the scheduler's alone, so activation must not pre-load (DESIGN.md 10.2)."""
+    from image_processor.engine.protocol import Stats
+
+    cell = running._supervisor.cells()[0]
+    assert running._supervisor.call(cell, Stats(), 30.0).resident == ()
+    assert running._scheduler._resident.get(cell.cell_id, {}) == {}
+
+    write_capture(home / "spool", "cap.png", corpus.image("anomaly-good.png"))
+    running._source_of("clearance-cam-01").rescan()
+    _drain(running)
+
+    digest = running._config.route("clearance-cam-01").model_ref.digest
+    assert running._scheduler.counters["loads"] == 1, "the first job paid for the load"
+    assert digest in running._scheduler._resident[cell.cell_id]
+    assert running._supervisor.call(cell, Stats(), 30.0).resident == (digest,)
+
+
 def test_the_same_image_is_admitted_once(running, home, corpus):
     write_capture(home / "spool", "cap.png", corpus.image("anomaly-good.png"))
     source = running._source_of("clearance-cam-01")

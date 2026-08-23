@@ -336,7 +336,10 @@ Configuration names the desired model set; the component makes it active (D-IP-9
 3. Verify the tarball digest, then the signature when required, then extract with path, count,
    size, and ratio limits, then verify per-file digests and the manifest schema.
 4. Validate provider compatibility and task-family support; refuse otherwise.
-5. Run golden warmup on the target provider.
+5. Run golden warmup on the target provider, then release the session again. Warmup answers
+   whether this bundle loads and reproduces its goldens on this device; residency is the
+   scheduler's, and a session held here would occupy device memory its map does not account for
+   (§10.2). What the load cost and what it occupied are kept and feed `get-models` and admission.
 6. Atomically promote the bundle into the content-addressed cache and mark it `STAGED`.
 7. Switch the route's active generation atomically; in-flight jobs keep their pinned generation;
    the last-known-good bundle is retained for rollback.
@@ -369,6 +372,10 @@ Cache tiers: resident GPU sessions (L0), host page cache of memory-mapped model 
 local content-addressed bundle cache (L2), the remote source (L3). Residency is keyed by model
 digest plus provider/options, precision, shape profile, and GPU class, not by route; routes bound to
 the same generation share one session.
+
+The scheduler owns residency: it is the only component that makes a session resident, and every
+resident session is in its map. Activation warms and releases (§9 step 5), so the first job on a
+newly activated generation pays for its load.
 
 GPU admission uses the manifest estimate, previously measured load peak and steady-state delta
 (NVML), current device free memory, a runtime safety reserve, the expected activation peak, and a

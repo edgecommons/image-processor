@@ -234,7 +234,7 @@ serving the last known good model), `DEGRADED` (it cannot decide right now), or 
 
 | Verb | Scope | Request body | Reply |
 |---|---|---|---|
-| `get-models` | component | `{cursor?, max?}` | `{models: [{id, version, digest, uri, staged, warmed, activeRoutes, stagingRoutes, rollback, error}], nextCursor, total}` |
+| `get-models` | component | `{cursor?, max?}` | `{models: [{id, version, digest, uri, staged, warmed, warmupSamples, loadMs, deviceMiB, activeRoutes, stagingRoutes, rollback, error}], nextCursor, total}` |
 | `get-queue` | both | `{route?, states?, cursor?, max?}` | `{route, jobs: [{inferenceId, route, state, attempts, source, model, lastError}], nextCursor, counts, scheduler}` |
 | `trigger-rescan` | both | `{route?}` | `{route, discovered}` |
 | `preload-model` | component | `{id?, digest?}` | deferred: `{id, version, digest, staged, warmed, routesSwitched}` |
