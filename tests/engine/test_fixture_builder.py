@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+import numpy as np
 import pytest
 
 from tests.fixtures.build import (
@@ -53,11 +54,17 @@ def test_a_different_seed_changes_only_the_pseudo_random_fixtures(tmp_path):
     assert default["images"]["detect-scene.png"]["sha256"] != other["images"]["detect-scene.png"]["sha256"]
 
 
-def test_every_bundle_carries_the_four_members_and_matching_digests(corpus):
+def test_every_bundle_carries_its_members_and_matching_digests(corpus):
     for key, bundle in corpus.expected["bundles"].items():
         directory = corpus.path(bundle["path"])
         document = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-        assert set(document["files"]) == {"model.onnx", "labels.json", "transforms.json"}, key
+        assert set(document["files"]) == {
+            "model.onnx",
+            "labels.json",
+            "transforms.json",
+            "warmup/input-01.bin",
+            "warmup/expected-01.json",
+        }, key
         for member, digest in document["files"].items():
             assert hashlib.sha256((directory / member).read_bytes()).hexdigest() == digest, key
         transforms = json.loads((directory / "transforms.json").read_text(encoding="utf-8"))
@@ -65,6 +72,26 @@ def test_every_bundle_carries_the_four_members_and_matching_digests(corpus):
         assert transforms["transformVersion"] == document["transformVersion"], key
         labels = json.loads((directory / "labels.json").read_text(encoding="utf-8"))
         assert isinstance(labels, list) and labels, key
+
+
+def test_every_bundle_declares_one_golden_warmup_sample(corpus):
+    """Tier 1 only exercises the warmup gate if the corpus actually carries goldens."""
+    for key, bundle in corpus.expected["bundles"].items():
+        directory = corpus.path(bundle["path"])
+        document = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+        assert len(document["warmup"]) == 1, key
+        sample = document["warmup"][0]
+        assert sample["input"] == "warmup/input-01.bin", key
+        assert sample["expected"] == "warmup/expected-01.json", key
+        assert sample["inputName"] == document["inputs"][0]["name"], key
+        assert sample["dtype"] == document["inputs"][0]["dtype"], key
+        assert sample["shape"] == document["inputs"][0]["shape"], key
+        assert document["tolerances"]["absolute"] == 1e-5, key
+
+        raw = (directory / sample["input"]).read_bytes()
+        assert len(raw) == 4 * int(np.prod(sample["shape"])), key
+        answer = json.loads((directory / sample["expected"]).read_text(encoding="utf-8"))
+        assert set(answer) == {spec["name"] for spec in document["outputs"]}, key
 
 
 def test_the_manifest_document_maps_onto_the_shared_dataclass(corpus):

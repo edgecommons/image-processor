@@ -64,7 +64,7 @@ may publish a duplicate, so consumers deduplicate on `inferenceId`.
   "model": {
     "id": "synthetic-anomaly-scalar",
     "version": "1.0.0",
-    "digest": "sha256:7dfefce8…",
+    "digest": "sha256:4a87394f…",
     "runtime": "onnxruntime",
     "providers": ["CPUExecutionProvider"],
     "gpu": null,
@@ -214,8 +214,8 @@ answer can never disagree with a pushed one:
       "state": "ONLINE",
       "detail": "/var/spool/camera-adapter/cam-01",
       "attributes": {
-        "desiredGeneration": "sha256:7dfefce8…",
-        "activeGeneration": "sha256:7dfefce8…",
+        "desiredGeneration": "sha256:4a87394f…",
+        "activeGeneration": "sha256:4a87394f…",
         "sourceReachable": true,
         "executorHealthy": true,
         "queued": 0,

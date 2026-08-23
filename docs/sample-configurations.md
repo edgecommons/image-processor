@@ -43,7 +43,7 @@ component fetch over the network.
         {
           "id": "synthetic-anomaly-scalar",
           "version": "1.0.0",
-          "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00",
+          "digest": "sha256:4a87394f34ab6c1b1f17c9d048ebed277e5fdae8f76823a8d2371cfd57178ee1",
           "uri": "/var/lib/edgecommons/image-processor/bundles/synthetic-anomaly-scalar-1.0.0.tar"
         }
       ],

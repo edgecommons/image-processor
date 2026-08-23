@@ -23,8 +23,8 @@ pip install -e . -r requirements-test.txt
 
 The component only runs models that arrive as verified bundles, so you need one before it has
 anything to do. The test corpus generates its models rather than downloading them, which makes the
-bundle digest reproducible — the same command on any machine produces the same digest, which is
-what `test-configs/config.json` pins.
+bundle digest reproducible — the same commands on the same ONNX Runtime produce the same bytes,
+which is what `test-configs/config.json` pins.
 
 ```bash
 python3 tests/fixtures/build.py --out tests/fixtures/out
@@ -36,7 +36,7 @@ python3 tools/make_bundle.py tests/fixtures/out/bundles/synthetic-anomaly-scalar
 The last command prints the bundle digest:
 
 ```text
-sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00
+sha256:4a87394f34ab6c1b1f17c9d048ebed277e5fdae8f76823a8d2371cfd57178ee1
 ```
 
 That is the digest `models[0].digest` and `instances[].modelRef.digest` already name in
@@ -70,9 +70,9 @@ Watch the log. In order, it stages the bundle, warms it on the executor cell, ac
 routes, subscribes the camera announcement channel and the trigger topic, and reports ready:
 
 ```text
-staged synthetic-anomaly-scalar 1.0.0 (sha256:7dfefce8…)
-warmed synthetic-anomaly-scalar on cpu-0 in 51 ms (0 golden sample(s), providers CPUExecutionProvider)
-route clearance-cam-01 is now running synthetic-anomaly-scalar (sha256:7dfefce8…)
+staged synthetic-anomaly-scalar 1.0.0 (sha256:4a87394f…)
+warmed synthetic-anomaly-scalar on cpu-0 in 51 ms (1 golden sample(s), providers CPUExecutionProvider)
+route clearance-cam-01 is now running synthetic-anomaly-scalar (sha256:4a87394f…)
 route clearance-cam-01 subscribed camera hints on ecv1/smoke-device/camera-adapter/cam-01/app/image/captured
 route adhoc-inspect subscribed ecv1/+/inspection-ui/+/app/inspect/request
 ImageProcessor is running: 2 route(s), 1 model(s)
@@ -164,7 +164,7 @@ the authoritative output — the one a safety gate reads:
   "model": {
     "id": "synthetic-anomaly-scalar",
     "version": "1.0.0",
-    "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00",
+    "digest": "sha256:4a87394f34ab6c1b1f17c9d048ebed277e5fdae8f76823a8d2371cfd57178ee1",
     "runtime": "onnxruntime",
     "providers": ["CPUExecutionProvider"],
     "gpu": null
@@ -210,8 +210,8 @@ $ ec-uns-cmd --device smoke-device --component image-processor status
   "instances": [
     {
       "attributes": {
-        "activeGeneration": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00",
-        "desiredGeneration": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00",
+        "activeGeneration": "sha256:4a87394f34ab6c1b1f17c9d048ebed277e5fdae8f76823a8d2371cfd57178ee1",
+        "desiredGeneration": "sha256:4a87394f34ab6c1b1f17c9d048ebed277e5fdae8f76823a8d2371cfd57178ee1",
         "executorHealthy": true,
         "oldestAgeSecs": 0.0,
         "paused": false,
