@@ -956,7 +956,10 @@ class ImageProcessor(ConfigurationChangeListener):
                 inference_id=job.inference_id,
                 topic=prepared.topic,
                 encoded_bytes=prepared.encoded_bytes,
-                gating=bool(self._config.publish.require_confirmation_before_cleanup),
+                # Confirmation always gates cleanup: the result is the only durable record
+                # that a decision was made, so nothing moves before the broker has it (D-IP-6,
+                # D-IP-20).
+                gating=True,
             )
         ]
         sidecar = (str(installed.path), installed.sha256) if installed is not None else None

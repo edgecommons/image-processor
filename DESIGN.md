@@ -49,6 +49,7 @@ decision rests on, checked on 2026-08-22.
 | D-IP-17 | **Test corpus in four tiers** (§16): synthetic known-answer ONNX graphs and generated images in CI; permissively licensed real models (MobileNetV2, ResNet-50, YOLOX-Nano/S, SSD-MobileNetV1, FCN-ResNet50, anomalib PatchCore on VisA `capsules`) with Imagenette, a COCO val2017 slice, and VisA; a synthesized multi-bundle corpus for residency tests; camera-sim E2E. YOLOv8/YOLO11 (AGPL-3.0) and MVTec AD (CC BY-NC) are excluded. | Known answers make the CI suite deterministic and network-free; the real-model tier proves decode/pre/post chains; residency needs more bundles than fit in 8 GB, which real models cannot supply. License terms must be compatible with a BUSL product even for test use. |
 | D-IP-18 | **camera-adapter's `sim` backend gains a `playlist` pattern** that replays a directory of real images as captures with genuine sidecars and announcements. | The sim's synthetic patterns prove plumbing only; a true line-clearance E2E in the Dallas harness needs real imagery through the real camera path. Reusable by any future vision component. |
 | D-IP-19 | **The real-model tier runs nightly and on demand**, not per PR; golden results are committed as small JSON files; images and models are never committed (pinned-URL + SHA-256 asset manifest, cached under `tests/.cache/`). | Keeps per-PR CI fast and repository size bounded while still asserting parity against real models. |
+| D-IP-20 | **`publish.requireConfirmationBeforeCleanup` and mutating `onPublishFailure` values are removed:** confirmation always gates cleanup and a publish failure always retains the input; an operator re-drives with `retry-publication`. | Neither knob could take effect. Cleanup runs only out of `PUBLISHED` (D-IP-6), so nothing archives, deletes, or quarantines without transport confirmation; and §7 gives `PUBLISH_EXHAUSTED` no edge to cleanup, so a mutating publish-failure action would move evidence out from under a publication that is still expected to happen. `onPublishFailure` keeps its key, restricted to `retainInPlace`, so a regulated profile states the behavior rather than inheriting it. |
 
 Residual facts verified on 2026-08-22 that shape the design: the Python core exposes candidate
 validators (validate-then-apply, reject-and-keep) and a post-apply listener but no prepared
@@ -414,7 +415,7 @@ Illustrative; `config.schema.json` is the contract.
       "gpu": { "devices": ["0"], "residentMemoryBudgetPercent": 80, "reserveMiB": 2048 },
       "scheduler": { "maxBatchLatencyMs": 20, "hotTtlSecs": 120, "minResidencySecs": 15 },
       "discovery": { "rescanSecs": 60, "debounceMs": 500 },
-      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true, "outboxReserveBudgetMiB": 256 },
+      "publish": { "confirmationTimeoutSecs": 10, "outboxReserveBudgetMiB": 256 },
       "modelSources": { "allowedSchemes": ["s3"], "allowedUriPrefixes": ["s3://approved-models/"], "verifyTls": true },
       "signing": {
         "required": true,
@@ -481,8 +482,9 @@ is how long notifications must stop before a nudged walk runs. `publish.outboxRe
 the admission reservation budget in bytes — the capacity §7 requires a job to hold before it is
 admitted — while `publish.outboxCapacity` bounds the number of pending rows.
 
-Completion actions are spelled `archive | delete | retainInPlace | quarantine`, and
-`onCollision` is `fail` or `suffix`: `fail` records `CLEANUP_FAILED` and leaves both objects
+Completion actions are spelled `archive | delete | retainInPlace | quarantine`, except
+`onPublishFailure`, which takes `retainInPlace` alone (D-IP-20). `onCollision` is `fail` or
+`suffix`: `fail` records `CLEANUP_FAILED` and leaves both objects
 intact, `suffix` installs the input beside the occupant under a deterministic digest-derived name.
 Neither overwrites the object already there. A route with no `failedDir` quarantines in place.
 

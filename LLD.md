@@ -170,7 +170,9 @@ limits and both are kept.
 Config-level completion actions use §11's spelling (`archive | delete | retainInPlace |
 quarantine`) and map onto `CompletionAction`, where `retainInPlace` is `RETAIN`; `onCollision` is
 `fail | suffix`, matching `completion.actions.COLLISION_FAIL` / `COLLISION_SUFFIX`. A route with
-no `failedDir` quarantines in place.
+no `failedDir` quarantines in place. `onPublishFailure` accepts `retainInPlace` alone and any
+other value raises `ON_PUBLISH_FAILURE_NOT_SUPPORTED`, because `PUBLISH_EXHAUSTED` has no cleanup
+edge (D-IP-20); the key is kept so a regulated profile can state the behavior.
 
 `ReadinessMode` and `CollisionPolicy` define `__str__ = str.__str__`, so `str(mode)` yields the
 configured spelling. `sources/readiness.py` normalizes that field with `str()`, and without this a
@@ -186,7 +188,8 @@ it, which is the gate that keeps the two from drifting.
 # config/models.py
 class ConfigError(ValueError): code: str; message: str      # stable SCREAMING_SNAKE codes
 class ReadinessMode(str, Enum): CAMERA_SIDECAR, CAMERA_STATUS, MARKER, STABILITY
-class CollisionPolicy(str, Enum): FAIL = "fail"
+class CollisionPolicy(str, Enum): FAIL = "fail"; SUFFIX = "suffix"
+class PublishFailureAction(str, Enum): RETAIN_IN_PLACE = "retainInPlace"   # the only one (D-IP-20)
 MAX_INLINE_BYTES = 65536; MUTATING_ACTIONS = {ARCHIVE, DELETE, QUARANTINE}
 COMPLETION_ACTION_NAMES: dict[str, CompletionAction]; EXECUTION_PROVIDERS: tuple[str, ...]
 
@@ -197,9 +200,8 @@ COMPLETION_ACTION_NAMES: dict[str, CompletionAction]; EXECUTION_PROVIDERS: tuple
 @dataclass(frozen=True) class SchedulerConfig: max_batch_size, max_batch_latency_ms, hot_ttl_secs,
     min_residency_secs, max_attempts, retry_backoff_secs, max_retry_backoff_secs,
     queue_age_warning_secs
-@dataclass(frozen=True) class PublishConfig: confirmation_timeout_secs,
-    require_confirmation_before_cleanup, max_attempts, outbox_capacity,
-    outbox_reserve_budget_mib; .outbox_reserve_budget_bytes
+@dataclass(frozen=True) class PublishConfig: confirmation_timeout_secs, max_attempts,
+    outbox_capacity, outbox_reserve_budget_mib; .outbox_reserve_budget_bytes
 @dataclass(frozen=True) class DiscoveryConfig: rescan_secs, debounce_ms; .debounce_secs
 @dataclass(frozen=True) class TrustedKey: key_id; public_key: str | SecretRef
 @dataclass(frozen=True) class SigningConfig: required; trusted_keys; key(key_id) -> TrustedKey|None
@@ -208,7 +210,8 @@ COMPLETION_ACTION_NAMES: dict[str, CompletionAction]; EXECUTION_PROVIDERS: tuple
 @dataclass(frozen=True) class ModelEntry: id, version, digest, uri, credentials_ref: SecretRef|None,
     activation: ModelActivation; .ref -> ModelRef
 @dataclass(frozen=True) class CompletionPolicy: on_success, on_invalid_input,
-    on_operational_failure, on_publish_failure (CompletionAction), on_collision (CollisionPolicy),
+    on_operational_failure, on_publish_failure (CompletionAction; always RETAIN, D-IP-20),
+    on_collision (CollisionPolicy),
     source_root: Path|None, archive_dir: Path|None, failed_dir: Path|None;
     .actions, .mutates, .with_source_root(root)
     # satisfies completion.actions.CompletionPolicy (a runtime_checkable Protocol). It annotates
@@ -385,7 +388,7 @@ reconciliation.
 
 `CompletionPolicy` is a structural `Protocol` in `completion/actions.py` carrying `source_root`,
 `archive_dir`, `failed_dir`, `on_success`, `on_invalid_input`, `on_operational_failure`,
-`on_publish_failure`, and `on_collision`; WP1's `config.models.CompletionPolicy` dataclass
+`on_publish_failure` (always `RETAIN`), and `on_collision`; WP1's `config.models.CompletionPolicy` dataclass
 satisfies it. `source_root` is the route's `source.root`, which completion needs to resolve an
 input's absolute path from `Job.source.relative_path`. Action values accept both the durable enum
 and the config spellings, including `retainInPlace`.
