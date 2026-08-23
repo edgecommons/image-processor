@@ -77,7 +77,6 @@ def manifest() -> dict:
                 "expected": "warmup/expected-01.json",
                 "dtype": "float32",
                 "shape": [1, 3, 640, 640],
-                "compare": "tensors",
             }
         ],
         "tolerances": {"absolute": 0.0001, "relative": 0.001, "boxIou": 0.9},

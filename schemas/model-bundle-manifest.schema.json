@@ -435,11 +435,6 @@
           "maxItems": 8,
           "items": { "type": "integer", "minimum": 1 },
           "description": "The fully resolved shape of the sample's binary input. A warmup sample has no dynamic axes."
-        },
-        "compare": {
-          "enum": ["tensors", "normalized"],
-          "default": "tensors",
-          "description": "What `expected` holds. `tensors`: raw output tensors, compared elementwise under `tolerances`. `normalized`: the family's normalized output, compared field by field, which is what a quantized model uses when its raw tensors are not reproducible."
         }
       }
     },

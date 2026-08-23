@@ -38,6 +38,13 @@ test = ["pytest>=7", "pytest-cov", "onnx>=1.15"]
 # WP2 (bundles): `s3://` model sources. boto3 is never a hard dependency; without it an `s3://`
 # URI fails with BundleError("S3_UNAVAILABLE").
 s3 = ["boto3>=1.34"]
+# WP4b (engine): the NVIDIA execution path. `gpu` replaces the CPU-only onnxruntime wheel with the
+# CUDA build on a machine that has a device; `nvml` adds the device-memory probe the residency
+# policy reads for admission and eviction. Neither is a hard dependency: without `nvml` the policy
+# admits on the manifest estimate alone, and without `gpu` the identical pipeline runs on
+# CPUExecutionProvider, which is the CI parity path (D-IP-14) and, for a route, development only.
+gpu = ["onnxruntime-gpu>=1.17"]
+nvml = ["nvidia-ml-py>=12"]
 
 [tool.setuptools.packages.find]
 # Every subpackage of image_processor ships in the wheel (the reusable CI and the Dockerfile

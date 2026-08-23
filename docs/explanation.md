@@ -204,3 +204,116 @@ camera path by the `sim` backend's playlist pattern.
 Each tier answers a question the others cannot. Tier 1 says the arithmetic is right, tier 2 says
 real models are read correctly, tier 3 says the device stays inside its memory, and tier 4 says the
 components agree with each other.
+
+## Pixels stay inside the executor cell
+
+Inference runs in a separate process. The parent process owns configuration, the job ledger, the
+outbox, and the files; an executor cell owns one GPU, one CUDA context, and a cache of loaded
+models. There is one cell per configured device.
+
+The parent sends a job descriptor - a path, the digest that file must have, the model digest, and
+the transform version - and never an image. The cell opens the file itself, hashes it, checks the
+hash against the descriptor, decodes it, preprocesses it, runs the session, and answers with a
+bounded typed result: the normalized task output, the decision, the timings, the actual execution
+providers, the device it ran on, and the memory high-water mark.
+
+That split is what makes a GPU failure survivable. A CUDA context that faults takes its process
+with it, and everything that must survive - the durable job record, the prepared result message,
+the file ownership - is in the process that never touches CUDA.
+
+## The provider a result names is the one the session got
+
+A session reports which execution providers it was actually assigned, and that is what the
+component checks the route's policy against and what every result records. ONNX Runtime falls back
+to the CPU on its own when a provider is unavailable, so a component that recorded what it
+requested would report GPU inference for work that ran on a CPU.
+
+A CPU-only assignment is refused unless `runtime.allowCpuOnly` is set, which is a development
+setting. `runtime.requiredProvider` must appear in the assignment. The bundle manifest adds its own
+constraint: `requireListed` demands every provider in `providersPermitted`, in that order, and
+`preferListed` demands that the provider the session chose is one of them.
+
+Before a session serves a job it is warmed. A bundle that carries golden warmup samples has each
+one run and compared against its recorded answer within the manifest's tolerances; a bundle that
+carries none gets a shape-only pass that allocates the arena and compiles the kernels. A golden
+answer that no longer reproduces refuses the model rather than serving it.
+
+## A failure is one of three things
+
+What happens after a failure depends on what kind of failure it is, so every error is classified
+from the exception and its message:
+
+| Class | What it means | What follows |
+|---|---|---|
+| `transient` | A later attempt may succeed: a device out of memory, a busy GPU, a session that is no longer resident. | The job waits in `RETRY_WAIT` with exponential backoff and jitter, and each attempt spends one of its retry budget. |
+| `permanent` | Every attempt fails the same way: an unreadable image, a head no task family serves, a provider policy this machine cannot satisfy. | The job goes to `PROCESSING_EXHAUSTED`; a model that cannot load sends every job pinned to it to `BLOCKED_CONFIGURATION`. |
+| `contaminating` | The CUDA context is no longer trustworthy: an illegal address, a failed launch, a destroyed context, an ECC fault. | The cell is recycled and the job runs again at the same attempt. |
+
+An out-of-memory is also a measurement. The residency policy records it and asks for more headroom
+the next time that model loads, so a retry is not the identical request that just failed.
+
+A failure a rule does not recognize is treated as transient. That way an unexplained failure is
+retried under its budget and then exhausted, rather than being silently declared permanent - and a
+result that never arrives, whatever the reason, is `HOLD` to every consumer downstream.
+
+## A recycled cell owes its job back
+
+The supervisor watches its cells. A cell that dies, misses a call deadline, or reports a
+contaminating failure is drained and replaced under the same identity, and the request that was in
+flight comes back to the scheduler, which returns the job to its lane at the same attempt with the
+same `inferenceId` and the same pinned model digest.
+
+Restarting is bounded. A cell that is recycled more than `maxRestarts` times inside the restart
+window stays down and the component reports the executor boundary as unhealthy, because a cell that
+cannot stay up is a machine problem, and restarting it forever would hide it.
+
+Recycling one cell evicts every model resident on that device. The recycle count and the reload
+time that follows it are what the GPU metrics report.
+
+## A model is resident because it is worth its memory
+
+A device holds a handful of models and a site has hundreds, so what is resident is a decision.
+
+Admission asks whether a model fits right now. The answer combines the manifest's estimated device
+memory, the peak that digest actually took the last time it loaded, the device's current free
+memory as NVML reports it, the runtime safety reserve, the allowance for processes the component
+does not own, `gpu.residentMemoryBudgetPercent` of the device, and the transient peak a session
+pays while it initializes. `gpu_mem_limit` bounds the provider's arena; it does not bound the load.
+
+When a model does not fit, sessions are evicted to make room, and they are priced rather than aged
+out. A session's retained value comes from the work queued for it, the reuse it has seen, the
+measured cost of loading it again, the route priority, and how recently it ran; the lowest value
+per byte leaves first. A session is never evicted while a job is running on it, while it is still
+draining the burst it was loaded for, or before `scheduler.minResidencySecs` has passed - the last
+of these is the hysteresis that stops two hot models from evicting each other.
+
+When nothing can be evicted, the load waits. Back-pressure here is latency and a degraded route; an
+accepted job is never dropped.
+
+## One pass decides everything
+
+Work waits in one lane per model generation, because that is the unit residency is keyed by: routes
+bound to the same digest share one session, and a lane is what the cost of loading it is amortized
+over. One scheduling pass does the whole cycle in a fixed order, which is what makes it
+reproducible:
+
+1. Retry timers that have come due return their jobs to `READY` and to their lanes.
+2. Lanes are ranked. Work whose model is already resident goes first, since it costs no load, and a
+   lane that has waited longer than `scheduler.hotTtlSecs` joins that first tier so that a
+   continuously busy model cannot starve the rest. Inside a tier, the oldest queue weighted by
+   route priority wins.
+3. The chosen lane's model is made resident, evicting if it must and loading at most
+   `runtime.loadConcurrencyPerGpu` models per device per pass. A cold model is loaded once however
+   many jobs are waiting for it.
+4. One job goes to each free cell, which is what "one inference in flight per cell" means.
+5. Every reply is applied in cell order: the ledger edge, the retry arithmetic, and the result
+   pipeline.
+
+The ledger, not the scheduler, is the record of what happened. The scheduler owns the edges from
+`READY` through `CLAIMED` and `WAITING_MODEL` to `INFERENCING`, and the failure edges out of them,
+and stops there: a successful result stays `INFERENCING` until the result, its sidecar digest, and
+its gating outbox rows commit in one transaction.
+
+`pause` stops the scheduler claiming new work while jobs already in flight finish, and `resume`
+starts it again. `get-queue` and `get-models` report what the pass sees: the lanes with their depth
+and age, what each cell holds, which sessions are leased, and the executor recycle count.

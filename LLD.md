@@ -417,33 +417,107 @@ def decide(normalized: NormalizedOutput, rules: dict) -> Decision
     #         "outcomeOnPass": "CLEAR", "outcomeOnFail": "HOLD"|"FAIL", "failOnEmpty": bool}
     # <expr> = {"path","op","value"} | {"all": [...]} | {"any": [...]}; ops >= > <= < == != exists absent count>=
     # anything unevaluable, and any exception, -> HOLD (never CLEAR); grammar in docs/reference/data-types.md
-# protocol.py  (parent <-> cell messages; plain dataclasses, pickled over multiprocessing pipes)
-LoadModel(digest, bundle_root, providers, provider_policy, warmup: bool) -> Loaded(digest, providers_assigned, load_ms, device_mib) | LoadFailed(digest, error, error_class)
-Infer(inference_id, staged_path, sha256, digest, transform_version) -> InferenceResult
-Unload(digest) -> Unloaded(digest, freed_mib)
-Stats() -> CellStats(resident: list[str], device_free_mib, device_total_mib, uptime_s)
+# protocol.py  (parent <-> cell messages; plain frozen dataclasses, pickled over multiprocessing pipes)
+LoadModel(digest, bundle_root, providers, provider_policy, providers_permitted, warmup: bool,
+          required_provider, allow_cpu_only, gpu_mem_limit_mib)
+    -> Loaded(digest, providers_assigned, load_ms, device_mib, warmup_samples, gpu_device, gpu_class)
+     | LoadFailed(digest, error, error_class, code, memory_pressure)
+Infer(inference_id, staged_path, sha256, digest, transform_version, queue_ms) -> InferenceResult
+Unload(digest) -> Unloaded(digest, freed_mib, was_resident, expected_mib)
+Stats() -> CellStats(resident, device_free_mib, device_total_mib, uptime_s, cell_id, gpu_device,
+                     gpu_class, resident_mib, inferences)
 Shutdown()
-# cell_main.py  (subprocess entry; the only place onnxruntime sessions live) — pragma: no cover, covered by an in-process harness that calls the same handler functions
+TRANSIENT | PERMANENT | CONTAMINATING                          # the error_class vocabulary
+def classify_error(exc) -> ErrorInfo(error_class, code, message, memory_pressure)
+def classify_message(text) -> ErrorInfo | None                 # the signature table CUDA errors are read by
+def verify_provider_assignment(assigned, permitted, policy, required_provider, allow_cpu_only) -> tuple
+def normalize_policy(policy) -> "requireListed" | "preferListed"
+# cell_main.py  (subprocess entry; the only place an onnxruntime session is created)
+@dataclass CellConfig(cell_id, device_id, providers, decode_limits, settle_ms, log_level)
+class CellState:                           # sessions keyed by digest, the device probe, the session factory
+def handle_load / handle_infer / handle_unload / handle_stats (state, message) -> reply
+def dispatch(state, message) -> reply ; def serve(state, connection) -> None
+def cell_entrypoint(config, connection) -> None    # pragma: no cover, the spawned child's first frame;
+    # the handlers and the loop it calls are covered in-process by tests/engine/
 # cell.py
 class ExecutorCell:                       # parent-side handle; spawn context; one per GPU (or CPU for dev)
-    def __init__(self, cell_id: str, device: str | None, providers: list[str]): ...
-    def start(self) / stop(self, timeout_s) / is_alive() / call(msg, timeout_s) -> reply
+    def __init__(self, cell_id: str, device: str | None, providers: list[str], decode_limits=None,
+                 settle_ms=0, log_level="INFO", start_timeout_s=60.0, call_timeout_s=300.0,
+                 context=None, entrypoint=None): ...
+    def start() / stop(timeout_s) / is_alive() / mark_broken(reason)
+    def send(msg) / receive(timeout_s) -> reply / call(msg, timeout_s) -> reply
+    # raises CellDead when the child is gone, CellTimeout at the per-call deadline (which also
+    # marks the handle broken, because a late reply cannot be told from the next one)
 # supervisor.py
-class Supervisor:                          # owns cells; restarts on contaminating errors or death; exposes healthy()
+class Supervisor:                          # owns cells; restarts on contaminating errors or death
+    def __init__(self, runtime=None, gpu=None, devices=None, providers=None, required_provider=None,
+                 allow_cpu_only=None, executor_cells_per_gpu=None, max_restarts=5,
+                 restart_window_s=600.0, cell_factory=None, stop_timeout_s=10.0,
+                 call_timeout_s=300.0, clock=time.monotonic): ...
+    def start() / stop() / cells() / cell(cell_id) / cells_for(device) / healthy() -> bool
+    def recycle(cell, reason) -> drained request | None    # bounded by the restart budget
+    def check() -> int ; def call(cell, msg, timeout_s) ; def status() -> dict
+    recycle_count: int
+    # SupervisorError("NO_GPU_DEVICES") when no device is configured and allowCpuOnly is not set
 # residency.py
-class ResidencyPolicy:                     # cost-aware score per DESIGN.md §10.3; admission check per §10.2 (manifest estimate + measured + free + reserve)
-    def admit(self, digest: str, estimate_mib: int, free_mib: int) -> bool
-    def victims(self, needed_mib: int, resident: dict[str, ResidencyStats], leased: set[str]) -> list[str]
+class DeviceMemoryProbe(Protocol): def snapshot(device_id) -> DeviceMemory
+class NvmlProbe / StaticMemoryProbe ; def probe_for(device_id) -> DeviceMemoryProbe
+def setting(source, *names, default=None)  # reads a DESIGN.md §11 field in either spelling
+class ResidencyPolicy:                     # cost-aware score per DESIGN.md §10.3; admission per §10.2
+    def __init__(self, gpu=None, scheduler=None, resident_memory_budget_percent=None, reserve_mib=None,
+                 min_residency_secs=None, hot_ttl_secs=None, activation_peak_factor=1.25,
+                 colocated_allowance_mib=0, queued_weight=10.0, reuse_weight=1.0, reload_weight=2.0,
+                 priority_weight=1.0, recency_weight=5.0, pressure_growth=1.25, clock=_now_ms): ...
+    def admit(self, digest, estimate_mib, free_mib, reserve_mib=None, budget_pct=None,
+              total_mib=None, resident_mib=0) -> Admission(admitted, required_mib, shortfall_mib, reason)
+        # truthy exactly when admitted, so `if policy.admit(...)` reads as a bool
+    def victims(self, needed_mib, resident: dict[str, ResidencyStats], leased) -> list[str]
+    def record_load(digest, peak_mib, load_ms) / record_memory_pressure(digest) / value(stats) / evictable(stats)
 # scheduler.py
 class Scheduler:
-    def __init__(self, ledger: Ledger, supervisor: Supervisor, cache: BundleCache, policy: ResidencyPolicy, cfg: SchedulerConfig): ...
-    def submit(self, job: Job) -> None                                  # READY/CLAIMED -> lanes per digest
+    def __init__(self, ledger, supervisor, cache, policy, cfg: SchedulerConfig = None, on_result=None,
+                 route_priorities=None, clock=_now_ms, rng=None, max_attempts=None,
+                 retry_backoff_secs=None, max_retry_backoff_secs=None, load_concurrency_per_gpu=None,
+                 infer_timeout_s=300.0, load_timeout_s=600.0, control_timeout_s=60.0,
+                 reclaim_ratio=0.5, poll_interval_s=0.05): ...
+    def submit(self, job: Job, priority=None) -> None                   # READY/CLAIMED/WAITING_MODEL -> lanes per digest; RETRY_WAIT -> the retry timer
     def run_once(self) -> int                                           # one scheduling pass; returns jobs dispatched (deterministic, testable)
-    def on_result(self, job: Job, result: InferenceResult) -> None     # callback to WP6 (result pipeline)
+    def run_forever(stop=None) / start() / stop(timeout_s)              # the loop and its thread
+    def pause() / resume() / queued() / reset_lane(digest) / status() -> dict   # get-queue, get-models
+    def on_result(self, job: Job, result: InferenceResult) -> None     # callback to WP6 (result pipeline);
+        # called for a success (the job is still INFERENCING, the app commits it) and for a terminal
+        # failure (PROCESSING_EXHAUSTED or BLOCKED_CONFIGURATION), never for a retry
 ```
 
-Phase 1 scheduler scope: single cell, per-digest lanes, min residency + hysteresis, cost-aware
-eviction, priority + age weighting, single-flight load, no micro-batching (Phase 2).
+Phase 1 scheduler scope: one cell per device, per-digest lanes, min residency + hysteresis,
+cost-aware eviction, priority + age weighting, single-flight load, no micro-batching (Phase 2, seam
+at `Scheduler._batch`).
+
+Three points where the interfaces above resolve something DESIGN.md states in prose:
+
+- **A lease is in-flight work plus an undrained burst.** `victims()` never touches a leased
+  session, and a lane's lease lasts until the burst it was loaded for is drained and
+  `minResidencySecs` has passed. Queued work is priced into the retained value instead of leasing,
+  because a lease held by any queued job would let a busy model starve every other lane (§10.2 with
+  §10.3).
+- **Resident-first, with a starvation escape.** Lane ranking prefers work whose model is already
+  resident; a lane whose oldest job has waited longer than `hotTtlSecs` joins that first tier, so
+  "weighted age and route priority prevent starvation" holds against a continuously busy model.
+- **The retry budget belongs to inference.** A transient *load* failure backs the lane off and
+  returns the job to `RETRY_WAIT` without spending an attempt; a transient *execution* failure
+  spends one and ends at `PROCESSING_EXHAUSTED`; a permanent execution failure goes straight there.
+  A permanent load failure blocks every job pinned to that digest at `BLOCKED_CONFIGURATION`, and
+  `reset_lane()` is how `preload-model`/`reload-model-catalog` clear it.
+
+WP1's `RuntimeConfig`/`GpuConfig`/`SchedulerConfig` are not merged yet, so `Supervisor`,
+`ResidencyPolicy`, and `Scheduler` read the DESIGN.md §11 fields through `residency.setting()`,
+which accepts an object or a mapping and matches names with underscores and case ignored
+(`residentMemoryBudgetPercent` and `resident_memory_budget_percent` are the same field). The fields
+consumed are `runtime.providers`, `runtime.requiredProvider`, `runtime.allowCpuOnly`,
+`runtime.executorCellsPerGpu`, `runtime.loadConcurrencyPerGpu`, `gpu.devices`,
+`gpu.residentMemoryBudgetPercent`, `gpu.reserveMiB`, `scheduler.maxBatchLatencyMs`,
+`scheduler.hotTtlSecs`, `scheduler.minResidencySecs`, and the retry budget `scheduler.maxAttempts`,
+`scheduler.retryBackoffSecs`, `scheduler.maxRetryBackoffSecs`.
 
 ## 7. `sources/` (WP5)
 
