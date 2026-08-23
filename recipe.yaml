@@ -73,7 +73,6 @@ ComponentConfiguration:
             debounceMs: 250
           publish:
             confirmationTimeoutSecs: 10
-            requireConfirmationBeforeCleanup: true
             maxAttempts: 20
             outboxCapacity: 10000
             outboxReserveBudgetMiB: 64
