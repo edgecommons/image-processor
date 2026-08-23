@@ -105,6 +105,9 @@ PRIME_PAGES = 40
 #: The page size of that walk.
 PRIME_PAGE_SIZE = 500
 
+#: How many failed completions one supervision pass retries.
+CLEANUP_RETRY_LIMIT = 50
+
 
 @dataclass
 class RouteRuntime:
@@ -381,8 +384,34 @@ class ImageProcessor(ConfigurationChangeListener):
         try:
             report = self._health.apply(self._gg)
             self._report_conditions(report)
+            self._retry_cleanups()
         except Exception:  # noqa: BLE001 - the supervision loop outlives one bad pass
             logger.warning("a supervision pass failed", exc_info=True)
+
+    def _retry_cleanups(self) -> int:
+        """Retry the completions that failed (DESIGN.md 7).
+
+        A cleanup failure is never success and never final: the intent stays on record and the job
+        sits in ``CLEANUP_FAILED`` until the thing that blocked it -- a file another process still
+        had open, a directory that was not there yet -- goes away. Retrying it on the supervision
+        pass is what "retried by policy" means; ``retry-cleanup`` is the same thing on demand.
+
+        Returns:
+            How many jobs left ``CLEANUP_FAILED`` in this pass.
+        """
+        jobs, _cursor = self._ledger.by_state([JobState.CLEANUP_FAILED], None, None, CLEANUP_RETRY_LIMIT)
+        repaired = 0
+        for job in jobs:
+            intent = self._ledger.cleanup_intent(job.inference_id)
+            if intent is None:
+                continue
+            if self._completer.reconcile(intent, self._collision_for(job.inference_id)) is not (
+                JobState.CLEANUP_FAILED
+            ):
+                repaired += 1
+        if repaired:
+            logger.info("retried %d failed completion(s)", repaired)
+        return repaired
 
     def _report_conditions(self, report: Any) -> None:
         """Raise and clear the operator conditions the current state implies."""
@@ -394,8 +423,12 @@ class ImageProcessor(ConfigurationChangeListener):
         self._events.publish_backlog(pending >= capacity * 0.8, pending, capacity)
         threshold = float(self._config.scheduler.queue_age_warning_secs)
         for status in self.route_statuses():
+            # A paused route is an operator decision, not a fault: it is reported as paused in the
+            # connectivity sample and does not raise a condition.
             self._events.route_degraded(
-                status.route_id, status.enabled and not status.connected, status.last_error or ""
+                status.route_id,
+                status.enabled and not status.paused and not status.connected,
+                status.last_error or "",
             )
             self._events.queue_age_exceeded(
                 status.route_id,
@@ -1090,7 +1123,26 @@ class ImageProcessor(ConfigurationChangeListener):
             return
         self._metrics.incr("ImageProcessorCompletion", "completed")
         self._metrics.incr("ImageProcessorCompletion", _completion_measure(intent.action))
+        self._discard_staged(job)
         logger.info("completed %s: %s", job.inference_id, intent.action.value)
+
+    def _discard_staged(self, job: Any) -> None:
+        """Remove the processor-owned copy of a referenced input once its job is over.
+
+        A file reference is copied into staging because the producer still owns the original and
+        may rewrite or delete it while the job waits for a GPU. Once the job is complete nothing
+        reads that copy again, and the completion already decided what happens to the original.
+        An inline input needs none of this: its staged copy is the only copy, so it is the object
+        the completion acts on.
+        """
+        if job.source.kind is not SourceKind.REFERENCE or not job.staged_path:
+            return
+        staged = Path(job.staged_path)
+        try:
+            if staged.is_relative_to(Path(self._config.paths.staging)):
+                staged.unlink(missing_ok=True)
+        except OSError as exc:  # noqa: BLE001 - a staged copy left behind is not a failed job
+            logger.debug("the staged copy of %s could not be removed: %s", job.inference_id, exc)
 
     def _effective_policy(self, job: Any, route: Any, error_class: Optional[str]) -> Any:
         """Resolve the completion policy this job actually runs under.

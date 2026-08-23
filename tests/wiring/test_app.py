@@ -325,3 +325,14 @@ def test_a_configured_secret_is_resolved_through_the_vault(home, corpus):
         assert app._artifacts.credentials["synthetic-anomaly-scalar"]["aws_access_key_id"] == "AKIA"
     finally:
         app.stop()
+
+
+def test_a_paused_route_is_not_reported_as_degraded(running, gg):
+    running.pause("clearance-cam-01")
+
+    running._tick()
+
+    assert gg.find_event("route-degraded") is None
+    status = {item.route_id: item for item in running.route_statuses()}["clearance-cam-01"]
+    assert status.paused is True
+    assert status.connected is False

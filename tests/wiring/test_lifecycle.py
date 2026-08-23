@@ -168,6 +168,7 @@ def test_a_result_over_the_budget_writes_evidence_even_when_the_route_configures
         app._supervisor.start()
         app._artifacts.reconcile()
         app._start_routes()
+        app._source_of("clearance-cam-01").stop()  # the test drives the walk, not the observer
         write_capture(home / "spool", "big.png", corpus.image("anomaly-good.png"))
         app._source_of("clearance-cam-01").rescan()
         _drain(app)

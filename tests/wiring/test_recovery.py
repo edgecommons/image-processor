@@ -105,3 +105,20 @@ def test_recovery_resubmits_what_it_restarted(running, home, corpus):
     running._resubmit()
 
     assert running._scheduler.queued() >= 1
+
+
+def test_a_failed_completion_is_retried_by_the_supervision_pass(running, home, corpus, gg):
+    inference_id = _run_one(running, home, corpus)
+    occupied = home / "processed" / "cap.png"
+    occupied.parent.mkdir(parents=True, exist_ok=True)
+    occupied.write_bytes(b"an unrelated file")
+    running._publisher.drain_once()
+    assert running._ledger.get(inference_id).state is JobState.CLEANUP_FAILED
+
+    assert running._retry_cleanups() == 0, "nothing changed, so nothing is repaired"
+
+    occupied.unlink()
+    assert running._retry_cleanups() == 1
+
+    assert running._ledger.get(inference_id).state is JobState.COMPLETED
+    assert occupied.is_file()

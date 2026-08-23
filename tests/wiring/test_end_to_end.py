@@ -192,3 +192,26 @@ def test_a_broker_outage_leaves_the_result_pending_and_the_image_in_place(
     assert running._publisher.drain_once() == 1
     assert _one_job(running).state is JobState.COMPLETED
     assert (home / "processed" / "outage.png").is_file()
+
+
+def test_a_file_reference_leaves_no_staged_copy_behind(running, gg, corpus, home):
+    import hashlib
+
+    data = corpus.image("anomaly-good.png")
+    (home / "inbox" / "batch").mkdir(parents=True)
+    (home / "inbox" / "batch" / "part.png").write_bytes(data)
+    _trigger(
+        running,
+        {
+            "relativePath": "batch/part.png",
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data),
+        },
+    )
+
+    _drain(running)
+    running._publisher.drain_once()
+
+    assert _one_job(running).state is JobState.COMPLETED
+    assert not (home / "inbox" / "batch" / "part.png").exists(), "the route deletes on success"
+    assert list((home / "staging").rglob("*.png")) == [], "the staged copy went with the job"

@@ -56,11 +56,25 @@ def main():
     gg.set_ready(False)
 
     app = deferred.bind(ImageProcessor(gg))
+
+    # The library's SIGTERM/SIGINT handler runs `gg.shutdown()` and exits, which closes messaging.
+    # The component drains its sources, its scheduler and its outbox through that same transport,
+    # so it has to stop first -- and wrapping shutdown is the seam that puts it first whichever
+    # way the process is asked to end. Both stops are idempotent, so the `finally` below is still
+    # correct when `run()` returns on its own.
+    library_shutdown = gg.shutdown
+
+    def shutdown() -> None:
+        """Stop the component, then the library."""
+        app.stop()
+        library_shutdown()
+
+    gg.shutdown = shutdown
+
     try:
         app.run()
     finally:
-        app.stop()
-        gg.shutdown()
+        shutdown()
 
 
 if __name__ == "__main__":
