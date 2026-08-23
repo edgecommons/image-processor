@@ -948,16 +948,29 @@ class Tier3Harness:
         """Return the device memory the residency budget allows the scheduler to hold.
 
         This is the bound ``ResidencyPolicy.admit`` enforces on the residency map:
-        ``residentMemoryBudgetPercent`` of the installed memory. ``reserveMiB`` is a separate
-        bound, applied to the device's free memory rather than to the map, so it is not subtracted
-        here.
+        ``residentMemoryBudgetPercent`` of the installed memory, less the CUDA context each cell
+        holds, which is the cell's overhead rather than any model's and comes off the budget once
+        (DESIGN.md section 10.2). ``reserveMiB`` is a separate bound, applied to the device's free
+        memory rather than to the map, so it is not subtracted here.
 
         Returns:
-            The budget in MiB.
+            The budget in MiB. Before the first load no cell has a context yet, so the figure is
+            the whole share.
         """
         reading = self._probe.snapshot(self.device)
         total = int(reading.total_mib or 0)
-        return total * int(self.gpu.residentMemoryBudgetPercent) // 100
+        share = total * int(self.gpu.residentMemoryBudgetPercent) // 100
+        return max(share - self.context_mib(), 0)
+
+    def context_mib(self) -> int:
+        """Return the CUDA context the cells on this device hold, as they measured it.
+
+        Returns:
+            The total in MiB, or ``0`` before any cell has loaded a model.
+        """
+        return sum(
+            int(cell.get("contextMib") or 0) for cell in self.scheduler.status()["cells"]
+        )
 
     def outstanding(self) -> int:
         """Return how many jobs are not in a terminal state."""
@@ -1137,6 +1150,7 @@ class Tier3Harness:
                 "peakResidentMiB": self._peak_resident_mib,
                 "minFreeMiB": self._min_free_mib,
                 "budgetMiB": self.budget_mib(),
+                "contextMiB": self.context_mib(),
                 "reserveMiB": int(self.gpu.reserveMiB),
             },
             "recycles": int(self.supervisor.recycle_count) - self._recycles_before,

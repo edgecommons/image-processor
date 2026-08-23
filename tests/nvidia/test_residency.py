@@ -123,7 +123,10 @@ def test_thrash_and_residency_are_reported(harness, results):
     assert status["recycleCount"] == harness.supervisor.recycle_count
     for cell in status["cells"]:
         assert cell["alive"] is True
-        assert set(cell) >= {"resident", "residentMib", "leased"}
+        assert set(cell) >= {"resident", "residentMib", "leased", "contextMib"}
+    assert all(entry["device"]["contextMiB"] >= 0 for entry in results.patterns), (
+        "the CUDA context is recorded apart from the models it holds (DESIGN.md section 10.2)"
+    )
 
 
 def test_every_result_ran_on_the_cuda_provider(harness, results):

@@ -524,6 +524,7 @@ class ResidencyPolicy:
         budget_pct=None,
         total_mib=None,
         resident_mib: int = 0,
+        context_mib: int = 0,
     ) -> Admission:
         """Decide whether one model may become resident right now (DESIGN.md §10.2).
 
@@ -536,7 +537,10 @@ class ResidencyPolicy:
                 ``residentMemoryBudgetPercent``.
             total_mib: Device memory installed, from the probe. ``0`` or ``None`` means the
                 budget percentage cannot be applied.
-            resident_mib: What this device already holds for this component.
+            resident_mib: What this device already holds for this component, in model footprints.
+            context_mib: The device context the cells on this device hold. It is fixed overhead
+                for as long as they live and belongs to no model, so it comes off the budget once
+                rather than being counted again with every model admitted against it.
 
         Returns:
             The :class:`Admission`. It is truthy when the load may proceed, and carries the
@@ -557,7 +561,7 @@ class ResidencyPolicy:
         shortfall = max(required - headroom, 0)
 
         if total > 0:
-            budget = int(total * percent / 100.0)
+            budget = max(int(total * percent / 100.0) - int(context_mib or 0), 0)
             if required > budget:
                 return Admission(
                     False,

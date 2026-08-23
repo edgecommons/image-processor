@@ -249,6 +249,13 @@ from the exception and its message:
 | `permanent` | Every attempt fails the same way: an unreadable image, a head no task family serves, a provider policy this machine cannot satisfy. | The job goes to `PROCESSING_EXHAUSTED`; a model that cannot load sends every job pinned to it to `BLOCKED_CONFIGURATION`. |
 | `contaminating` | The CUDA context is no longer trustworthy: an illegal address, a failed launch, a destroyed context, an ECC fault. | The cell is recycled and the job runs again at the same attempt. |
 
+`BLOCKED_CONFIGURATION` is the one non-terminal end of that list. The jobs there are pinned to a
+model generation this device could not load, and they wait for the configuration to change rather
+than for another attempt: a route that activates a generation that does load, or an operator
+running `reload-model-catalog` after re-staging the bundle or fixing the machine, returns them to
+`READY` and they run. A restart does not, because the component comes back on the configuration
+that blocked them.
+
 A permanent failure ends the job, but it does not say what happens to the image. That is decided by
 the failure code. An unreadable or corrupt image, an input digest that does not match its readiness
 evidence, an input over the byte bound, and an input that is no longer there are all failures of the
@@ -287,6 +294,13 @@ memory, the peak that digest actually took the last time it loaded, the device's
 memory as NVML reports it, the runtime safety reserve, the allowance for processes the component
 does not own, `gpu.residentMemoryBudgetPercent` of the device, and the transient peak a session
 pays while it initializes. `gpu_mem_limit` bounds the provider's arena; it does not bound the load.
+
+A cell's CUDA context is counted apart from the models. The executor establishes it before
+its first session, by building and dropping a one-node graph, and measures it there, so the
+memory a model is recorded as occupying is the model and nothing else. The budget carries each
+cell's context once. The same distinction decides whether an eviction was healthy: an unload
+gives back the session, never the context, so what came back is compared against the model's
+own footprint.
 
 When a model does not fit, sessions are evicted to make room, and they are priced rather than aged
 out. A session's retained value comes from the work queued for it, the reuse it has seen, the

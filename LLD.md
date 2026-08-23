@@ -368,6 +368,10 @@ class Ledger:
     def requeue_for_reinference(self, inference_id: str, reason: str) -> Job
         # DESIGN.md §7: a committed record whose sidecar is absent returns to re-inference;
         # drops the result bytes, the result digest, the sidecar binding, and the outbox rows
+    def requeue_blocked(self, route_id: str | None = None) -> int
+        # DESIGN.md §7: BLOCKED_CONFIGURATION -> READY for one route or all of them, by the
+        # recovery path, keeping the block reason as the job's last error. A successful
+        # activation and `reload-model-catalog` call it; `recover()` deliberately does not
 # completion/actions.py
 class Completer:
     def __init__(self, ledger: Ledger, fs: FsOps = RealFs(), on_collision: str = "fail", clock=_now_ms): ...
@@ -378,13 +382,18 @@ class Completer:
 
 `TRANSITIONS` (`ledger/schema.py`) is the DESIGN.md §7 state diagram, edge for edge, and is the
 only place an edge is legal; `transition()` refuses anything else with `IllegalTransition`.
-`RECOVERY_EDGES` (`ledger/recovery.py`) is the separate, smaller table a restart uses, because
-recovery moves a job backwards along edges the forward lifecycle never takes: `INFERENCING`,
-`CLAIMED`, `WAITING_MODEL`, and a due `RETRY_WAIT` to `READY`, plus `RESULT_COMMITTED` and
-`PUBLISH_PENDING` to `READY` for `requeue_for_reinference`. `RecoveryReport` carries the count per
-edge, the open cleanup intents, the inference ids still eligible for the publisher, and the
-sidecar bindings of committed-but-uncleaned jobs so the caller can run the DESIGN.md §7 filesystem
-reconciliation.
+`RECOVERY_EDGES` (`ledger/recovery.py`) is the separate, smaller table recovery uses, because it
+moves a job backwards along edges the forward lifecycle never takes: `INFERENCING`, `CLAIMED`,
+`WAITING_MODEL`, and a due `RETRY_WAIT` to `READY`, which a restart takes; `RESULT_COMMITTED` and
+`PUBLISH_PENDING` to `READY` for `requeue_for_reinference`; and `BLOCKED_CONFIGURATION` to `READY`
+for `requeue_blocked`. `INVALIDATABLE_STATES` is what `requeue_for_reinference` asks instead of
+the edge table, because holding a committed result to invalidate is a different question from
+having an edge back to `READY`. A restart leaves `BLOCKED_CONFIGURATION` alone: the process comes
+back on the configuration that blocked those jobs, so nothing about the restart says otherwise.
+
+`RecoveryReport` carries the count per edge, the open cleanup intents, the inference ids still
+eligible for the publisher, and the sidecar bindings of committed-but-uncleaned jobs so the caller
+can run the DESIGN.md §7 filesystem reconciliation.
 
 `CompletionPolicy` is a structural `Protocol` in `completion/actions.py` carrying `source_root`,
 `archive_dir`, `failed_dir`, `on_success`, `on_invalid_input`, `on_operational_failure`,
@@ -424,12 +433,13 @@ def decide(normalized: NormalizedOutput, rules: dict) -> Decision
 # protocol.py  (parent <-> cell messages; plain frozen dataclasses, pickled over multiprocessing pipes)
 LoadModel(digest, bundle_root, providers, provider_policy, providers_permitted, warmup: bool,
           required_provider, allow_cpu_only, gpu_mem_limit_mib)
-    -> Loaded(digest, providers_assigned, load_ms, device_mib, warmup_samples, gpu_device, gpu_class)
+    -> Loaded(digest, providers_assigned, load_ms, device_mib, warmup_samples, gpu_device, gpu_class,
+               context_mib)
      | LoadFailed(digest, error, error_class, code, memory_pressure)
 Infer(inference_id, staged_path, sha256, digest, transform_version, queue_ms) -> InferenceResult
 Unload(digest) -> Unloaded(digest, freed_mib, was_resident, expected_mib)
 Stats() -> CellStats(resident, device_free_mib, device_total_mib, uptime_s, cell_id, gpu_device,
-                     gpu_class, resident_mib, inferences)
+                     gpu_class, resident_mib, inferences, context_mib)
 Shutdown()
 TRANSIENT | PERMANENT | CONTAMINATING                          # the error_class vocabulary
 def classify_error(exc) -> ErrorInfo(error_class, code, message, memory_pressure)
@@ -438,7 +448,16 @@ def verify_provider_assignment(assigned, permitted, policy, required_provider, a
 def normalize_policy(policy) -> "requireListed" | "preferListed"
 # cell_main.py  (subprocess entry; the only place an onnxruntime session is created)
 @dataclass CellConfig(cell_id, device_id, providers, decode_limits, settle_ms, log_level)
-class CellState:                           # sessions keyed by digest, the device probe, the session factory
+class CellState:                           # sessions keyed by digest, the device probe, the session
+                                           # factory, the context factory, context_mib
+def identity_model() -> bytes              # a one-node Identity ONNX graph, serialized by hand as
+                                           # protobuf: `onnx` is not a runtime dependency and
+                                           # InferenceSession takes a serialized model
+def create_context_session(providers, options)
+def ensure_context(state, message) -> int  # DESIGN.md §10.2: builds and drops a trivial session
+    # before the first real one on a device cell, so the CUDA context is created and measured on
+    # its own. Every device_mib after it is a delta from the post-context baseline and carries the
+    # model alone; expected_mib on an Unload is therefore context-free too (§10.4)
 def handle_load / handle_infer / handle_unload / handle_stats (state, message) -> reply
 def dispatch(state, message) -> reply ; def serve(state, connection) -> None
 def cell_entrypoint(config, connection) -> None    # pragma: no cover, the spawned child's first frame;
@@ -473,7 +492,9 @@ class ResidencyPolicy:                     # cost-aware score per DESIGN.md §10
                  colocated_allowance_mib=0, queued_weight=10.0, reuse_weight=1.0, reload_weight=2.0,
                  priority_weight=1.0, recency_weight=5.0, pressure_growth=1.25, clock=_now_ms): ...
     def admit(self, digest, estimate_mib, free_mib, reserve_mib=None, budget_pct=None,
-              total_mib=None, resident_mib=0) -> Admission(admitted, required_mib, shortfall_mib, reason)
+              total_mib=None, resident_mib=0, context_mib=0) -> Admission(admitted, required_mib,
+                                                                          shortfall_mib, reason)
+        # context_mib comes off the budget once: it is per-cell overhead, not per-model memory
         # truthy exactly when admitted, so `if policy.admit(...)` reads as a bool
     def victims(self, needed_mib, resident: dict[str, ResidencyStats], leased) -> list[str]
     def record_load(digest, peak_mib, load_ms) / record_memory_pressure(digest) / value(stats) / evictable(stats)
@@ -511,7 +532,17 @@ Three points where the interfaces above resolve something DESIGN.md states in pr
   returns the job to `RETRY_WAIT` without spending an attempt; a transient *execution* failure
   spends one and ends at `PROCESSING_EXHAUSTED`; a permanent execution failure goes straight there.
   A permanent load failure blocks every job pinned to that digest at `BLOCKED_CONFIGURATION`, and
-  `reset_lane()` is how `preload-model`/`reload-model-catalog` clear it.
+  `reset_lane()` is how `preload-model`/`reload-model-catalog` clear the lane's block.
+- **A blocked job comes back through the ledger, not through the lane.** `_block_lane()` drains
+  the lane as it blocks, so `reset_lane()` leaves nothing to run. `Ledger.requeue_blocked()` moves
+  the jobs back to `READY` and `ImageProcessor._resubmit(route_id)` hands them to `submit()` again,
+  which is the same path startup recovery uses. A duplicate submission is safe: the second copy
+  loses the ledger's expected-state gate on its first claim and is dropped there.
+- **The device context is per cell, not per model.** The scheduler keeps `context_mib` per cell
+  from `CellStats` (and from the `Loaded` that established it), sums it per device, and passes it
+  to `admit()`, which takes it off the budget once. The reclaim check in `_unload()` compares
+  `freed_mib` against the model's context-free `expected_mib`, so a healthy cell is no longer
+  recycled after its first eviction (DESIGN.md §10.2, §10.4).
 
 WP1's `RuntimeConfig`/`GpuConfig`/`SchedulerConfig` are not merged yet, so `Supervisor`,
 `ResidencyPolicy`, and `Scheduler` read the DESIGN.md §11 fields through `residency.setting()`,
@@ -663,13 +694,19 @@ class ArtifactError(Exception): code; message
 def family_validator(manifest) -> None       # the engine/families check stage_bundle injects
 class ArtifactManager:
     def __init__(self, config, cache, ledger, supervisor=None, *, trusted_keys=None, credentials=None,
-                 events=None, metrics=None, on_activated=None, interval_secs=30.0,
+                 events=None, metrics=None, on_activated=None, on_requeued=None, interval_secs=30.0,
                  retry_backoff_secs=60.0, warmup_timeout_s=600.0, clock=time.monotonic)
     def stage(entry) -> CachedBundle ; def warm(entry, bundle) -> Loaded
         # LoadModel(warmup=True) then Unload on the same cell: warmup proves loadability, the
         # scheduler owns residency. The reply's load_ms/device_mib/warmup_samples land on the
         # GenerationState and are what `get-models` reports.
     def reconcile(route_ids=None, *, force=False) -> int    # desired -> STAGING -> warm -> active
+    def requeue_blocked(route_id) -> int    # DESIGN.md §7, called after every successful switch:
+        # ledger.requeue_blocked then on_requeued(route_id, count), which the app resubmits from
+    def route_error(route_id) -> str | None # the last staging/warmup/activation failure, cleared
+        # by a successful pass; RouteStatus.last_error, so `route-degraded` carries a reason
+    def verified(route_id) -> bool          # the route's entry is staged and free of failures;
+        # `reload-model-catalog` reads it to decide whose blocked jobs may go back to READY
     def rollback(route_id) ; def pinned() -> tuple ; def collect() -> tuple ; def status() -> list
     def adopt(config) ; def start() ; def stop(timeout_s) ; def wake()
 # connectivity.py
@@ -711,7 +748,9 @@ class ImageProcessor(ConfigurationChangeListener):
         # the sources.SourceEvents contract; `invalid` quarantines a refused spool file under the
         # route's onInvalidInput policy, which needs its digest, so the file is hashed first
     def on_configuration_change(configuration) -> bool    # add/remove/rebuild routes, keep the ledger
-    def route_statuses() -> list[RouteStatus]
+    def route_statuses() -> list[RouteStatus]     # last_error = artifacts.route_error(route) or
+        # the route runtime's own note, so the most specific reason for a degraded route wins
+    def _resubmit(route_id=None)                 # every READY job back to Scheduler.submit()
     # the command surface ProcessorCommands calls: route_ids, list_models, list_jobs, job_counts,
     # scheduler_summary, rescan, preload_model, evict_model, reload_model_catalog,
     # set_activation_override, retry_publication, retry_cleanup, reconcile, pause, resume

@@ -7,9 +7,9 @@ staged file itself, verifies the digest, decodes and preprocesses on the CPU, ru
 postprocesses through the task family, applies the decision rules, and answers with a bounded
 typed result. Pixels never travel back to the parent, and the parent never initializes CUDA.
 
-Three properties shape the module:
+Four properties shape the module:
 
-* **``onnxruntime`` is imported lazily, inside :func:`create_session`.** Importing this module
+* **``onnxruntime`` is imported lazily, inside :func:`onnxruntime_module`.** Importing this module
   therefore costs nothing and pulls no CUDA runtime in, which is what lets the parent-side handle
   in :mod:`image_processor.engine.cell` name the subprocess entry point without ever loading the
   runtime itself.
@@ -21,6 +21,10 @@ Three properties shape the module:
   ONNX graph is checked before the session is created, the golden warmup samples are compared
   against the manifest tolerances before the session serves a job, and the provider assignment is
   checked against the policy on what the session reports, not on what was requested.
+* **The device context is established and measured on its own.** It belongs to the cell, not to a
+  model, so the first load creates it through a one-node throwaway session and reports it
+  separately (:func:`ensure_context`). Every model footprint the cell reports is measured from the
+  baseline that leaves, and carries the model alone.
 """
 
 from __future__ import annotations
@@ -85,6 +89,13 @@ DEFAULT_RELATIVE_TOLERANCE = 0.0
 
 #: Largest warmup or expected-output member the cell reads.
 MAX_WARMUP_BYTES = 64 * 2**20
+
+#: The ONNX IR version the context graph declares. IR 7 is ONNX 1.8, which every runtime this
+#: component supports reads.
+CONTEXT_IR_VERSION = 7
+
+#: The default-domain opset the context graph declares.
+CONTEXT_OPSET = 13
 
 #: Cached ``onnxruntime`` module, imported on first use.
 _ORT = None
@@ -157,7 +168,8 @@ class LoadedSession:
         bundle_root: The cached bundle directory.
         providers_assigned: The session's actual provider assignment.
         load_ms: Wall-clock milliseconds the load and its warmup took.
-        device_mib: Device memory the load consumed, or ``0`` when unmeasured.
+        device_mib: Device memory this model occupies, measured from the post-context baseline,
+            or ``0`` when unmeasured. The cell device context is not part of it.
         input_names: The session's input tensor names.
         output_names: The session's output tensor names.
         use_io_binding: Whether to run through an I/O binding rather than ``run``.
@@ -189,14 +201,33 @@ class CellState:
             reports nothing for a CPU cell.
         session_factory: Builds an ONNX Runtime session. Defaults to :func:`create_session`;
             a test substitutes a stand-in to drive a failure the hardware will not produce.
+        context_factory: Builds the throwaway session that establishes the device context.
+            Defaults to :func:`create_context_session`.
         clock: Returns a monotonic time in seconds. Injected by tests.
+
+    Attributes:
+        context_mib: The device context this cell holds, measured once before its first session.
+            It is fixed overhead for the life of the cell and belongs to no model.
+        context_established: Whether the context measurement has been attempted. It is set on the
+            first load whether the measurement succeeded or not, so a cell that cannot measure
+            its context does not pay for the attempt again on every load.
     """
 
-    def __init__(self, config: CellConfig, probe=None, session_factory=None, clock=None) -> None:
+    def __init__(
+        self,
+        config: CellConfig,
+        probe=None,
+        session_factory=None,
+        context_factory=None,
+        clock=None,
+    ) -> None:
         """Build the state and its device probe."""
         self.config = config
         self.probe = probe if probe is not None else probe_for(config.device_id)
         self.session_factory = session_factory or create_session
+        self.context_factory = context_factory or create_context_session
+        self.context_mib = 0
+        self.context_established = False
         self.sessions: dict = {}
         self.inferences = 0
         self._clock = clock or time.monotonic
@@ -411,6 +442,105 @@ def provider_options(providers, device_id=None, gpu_mem_limit_mib=None) -> list:
         else:
             options.append({})
     return options
+
+
+def _varint(value: int) -> bytes:
+    """Encode one unsigned protobuf varint.
+
+    Args:
+        value: The non-negative integer to encode.
+
+    Returns:
+        The encoded bytes.
+    """
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        out.append(byte | (0x80 if value else 0))
+        if not value:
+            return bytes(out)
+
+
+def _length_field(number: int, payload: bytes) -> bytes:
+    """Encode one length-delimited protobuf field.
+
+    Args:
+        number: The field number.
+        payload: The already-encoded field bytes.
+
+    Returns:
+        The tag, the length, and the payload.
+    """
+    return _varint(number << 3 | 2) + _varint(len(payload)) + payload
+
+
+def _varint_field(number: int, value: int) -> bytes:
+    """Encode one varint protobuf field.
+
+    Args:
+        number: The field number.
+        value: The value.
+
+    Returns:
+        The tag and the value.
+    """
+    return _varint(number << 3) + _varint(value)
+
+
+def identity_model() -> bytes:
+    """Serialize the one-node ONNX graph the device context is established with.
+
+    The graph is a single ``Identity`` over one one-element float tensor, which is the smallest
+    thing ONNX Runtime will build a session for. It is serialized here as protobuf rather than
+    built with the ``onnx`` package, because the component depends on ``onnxruntime`` at runtime
+    and not on ``onnx``, and ``InferenceSession`` accepts a serialized model in place of a path.
+
+    Returns:
+        The serialized ``ModelProto``.
+    """
+    shape = _length_field(1, _varint_field(1, 1))
+    tensor = _varint_field(1, 1) + _length_field(2, shape)
+    type_proto = _length_field(1, tensor)
+
+    def value_info(name: bytes) -> bytes:
+        return _length_field(1, name) + _length_field(2, type_proto)
+
+    node = (
+        _length_field(1, b"x")
+        + _length_field(2, b"y")
+        + _length_field(3, b"identity")
+        + _length_field(4, b"Identity")
+    )
+    graph = (
+        _length_field(1, node)
+        + _length_field(2, b"device-context")
+        + _length_field(11, value_info(b"x"))
+        + _length_field(12, value_info(b"y"))
+    )
+    opset = _length_field(1, b"") + _varint_field(2, CONTEXT_OPSET)
+    return _varint_field(1, CONTEXT_IR_VERSION) + _length_field(7, graph) + _length_field(8, opset)
+
+
+def create_context_session(providers, options):
+    """Build the throwaway session that establishes this cell device context.
+
+    Args:
+        providers: The providers to request, highest priority first.
+        options: One options mapping per provider, from :func:`provider_options`.
+
+    Returns:
+        The session. The caller drops it immediately; the context it created stays.
+    """
+    ort = onnxruntime_module()
+    session_options = ort.SessionOptions()
+    session_options.log_severity_level = 3
+    return ort.InferenceSession(
+        identity_model(),
+        sess_options=session_options,
+        providers=list(providers),
+        provider_options=[dict(entry) for entry in options],
+    )
 
 
 def create_session(model_path, providers, options):
@@ -760,6 +890,68 @@ def run_warmup(loaded: LoadedSession) -> int:
 # -- handlers ------------------------------------------------------------------------------------
 
 
+def ensure_context(state: CellState, message: LoadModel) -> int:
+    """Establish and measure this cell device context before its first real session.
+
+    A CUDA context is a property of the process, not of a model. The runtime creates it when the
+    first CUDA session is built and it stays for as long as the cell lives, so charging it to
+    whichever model happened to load first overstates that model by the size of the context. Two
+    things then go wrong: DESIGN.md §10.4 reads the unload of that model as a cell that did not
+    give its memory back and recycles the cell, and DESIGN.md §10.2 budgets admissions against a
+    footprint that was never the model.
+
+    So the context is created on its own, by building a one-node session and dropping it again,
+    and measured on its own. What :func:`handle_load` samples afterwards is a post-context
+    baseline, and every per-model delta taken from it carries the model alone.
+
+    A cell that cannot build the throwaway session keeps the old behaviour rather than failing the
+    load: the context is then established by the first real session and charged to it, which is
+    what the reply says by reporting no context at all.
+
+    Args:
+        state: The cell state. The measurement is recorded on it and taken once per cell.
+        message: The load that reached this cell first. Its providers build the context.
+
+    Returns:
+        The context in MiB, or ``0`` when this cell already established one, has no device, or
+        could not measure it.
+    """
+    if state.context_established:
+        return 0
+    state.context_established = True
+    if state.config.device_id is None:
+        return 0
+    providers = tuple(message.providers or state.config.providers)
+    if CUDA_PROVIDER not in providers:
+        return 0
+    before = state.snapshot()
+    if not before.known:
+        return 0
+    try:
+        session = state.context_factory(
+            providers, provider_options(providers, state.config.device_id)
+        )
+        del session
+        gc.collect()
+    except Exception as exc:  # noqa: BLE001 - a cell that cannot pre-build one still loads models
+        logger.warning(
+            "cell %s could not establish its device context on its own, so its first model "
+            "carries it: %s",
+            state.config.cell_id,
+            exc,
+        )
+        return 0
+    after = state.snapshot()
+    state.context_mib = max(before.free_mib - after.free_mib, 0) if after.known else 0
+    logger.info(
+        "cell %s established a %d MiB device context on device %s",
+        state.config.cell_id,
+        state.context_mib,
+        state.config.device_id,
+    )
+    return state.context_mib
+
+
 def handle_load(state: CellState, message: LoadModel):
     """Make one model generation resident (DESIGN.md §9 steps 4-5, §10.1).
 
@@ -768,6 +960,9 @@ def handle_load(state: CellState, message: LoadModel):
     session is built with the requested providers, the assignment the session actually got is
     checked against the policy, and only then is the session warmed and published to the cache. A
     session that fails any of those never becomes resident.
+
+    The first load on a device cell also establishes the device context and measures it separately
+    (:func:`ensure_context`), so ``device_mib`` is the model and nothing else.
 
     Args:
         state: The cell state.
@@ -790,6 +985,7 @@ def handle_load(state: CellState, message: LoadModel):
         )
 
     started = time.perf_counter()
+    context_mib = ensure_context(state, message)
     before = state.snapshot()
     loaded = None
     try:
@@ -850,6 +1046,7 @@ def handle_load(state: CellState, message: LoadModel):
 
     after = state.snapshot()
     loaded.load_ms = (time.perf_counter() - started) * 1000.0
+    # ``before`` was sampled after ``ensure_context`` ran, so this delta is the model alone.
     loaded.device_mib = max(before.free_mib - after.free_mib, 0) if after.known else 0
     state.sessions[message.digest] = loaded
     logger.info(
@@ -869,6 +1066,7 @@ def handle_load(state: CellState, message: LoadModel):
         warmup_samples=loaded.warmup_samples,
         gpu_device=state.device,
         gpu_class=state.device_class(loaded.providers_assigned),
+        context_mib=context_mib,
     )
 
 
@@ -1085,6 +1283,10 @@ def handle_unload(state: CellState, message: Unload) -> Unloaded:
     reported rather than assumed: the parent compares ``freed_mib`` against ``expected_mib`` and
     recycles the cell when the difference says the arena is fragmented or the runtime is stuck.
 
+    ``expected_mib`` is the model footprint alone. The device context is not part of it and does
+    not come back from an unload, which is what made this comparison recycle a healthy cell once
+    per lifetime while the first model carried the context.
+
     Args:
         state: The cell state.
         message: The unload request.
@@ -1137,6 +1339,7 @@ def handle_stats(state: CellState, message: Stats) -> CellStats:
         gpu_class=reading.device_class,
         resident_mib={digest: entry.device_mib for digest, entry in state.sessions.items()},
         inferences=state.inferences,
+        context_mib=state.context_mib,
     )
 
 
@@ -1229,6 +1432,8 @@ def cell_entrypoint(config: CellConfig, connection) -> None:  # pragma: no cover
 
 
 __all__ = [
+    "CONTEXT_IR_VERSION",
+    "CONTEXT_OPSET",
     "DEFAULT_ABSOLUTE_TOLERANCE",
     "DEFAULT_RELATIVE_TOLERANCE",
     "MAX_WARMUP_BYTES",
@@ -1238,13 +1443,16 @@ __all__ = [
     "LoadedSession",
     "cell_entrypoint",
     "compare_warmup",
+    "create_context_session",
     "create_session",
     "dispatch",
+    "ensure_context",
     "failure_result",
     "handle_infer",
     "handle_load",
     "handle_stats",
     "handle_unload",
+    "identity_model",
     "member_path",
     "onnxruntime_module",
     "prime_session",

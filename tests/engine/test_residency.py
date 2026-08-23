@@ -239,3 +239,39 @@ def test_nvml_degrades_to_no_accounting_rather_than_failing_the_load(monkeypatch
     monkeypatch.setattr("builtins.__import__", refuse)
     assert probe.snapshot(0).known is False
     assert probe.snapshot(0).known is False
+
+
+# -- the device context is fixed per-cell overhead, not per-model (DESIGN.md 10.2) ---------------
+
+
+def test_the_device_context_comes_off_the_budget():
+    subject = policy(resident_memory_budget_percent=50, reserve_mib=0)
+    # 8192 installed, 50% of it is 4096, less a 300 MiB context leaves 3796 for models
+    fits = subject.admit("a", 3000, 8000, total_mib=8192, context_mib=300)
+    assert fits and fits.required_mib == 3750
+
+    over = subject.admit("b", 3040, 8000, total_mib=8192, context_mib=300)
+    assert not over
+    assert over.reason == "OVER_BUDGET"
+    assert subject.admit("b", 3040, 8000, total_mib=8192), "it fits when no context is charged"
+
+
+def test_the_device_context_is_charged_once_however_many_models_are_resident():
+    subject = policy(resident_memory_budget_percent=50, reserve_mib=0)
+
+    # 2600 MiB of models resident plus a 1250 MiB admission is 3850, over the 3796 the context
+    # leaves; without the context the same request fits inside the 4096 budget
+    tight = subject.admit("c", 1000, 5500, total_mib=8192, resident_mib=2600, context_mib=300)
+    assert not tight
+    assert tight.reason == "NEEDS_EVICTION"
+    assert tight.shortfall_mib == 54
+    assert subject.admit("c", 1000, 5500, total_mib=8192, resident_mib=2600)
+
+
+def test_a_context_bigger_than_the_budget_refuses_rather_than_going_negative():
+    subject = policy(resident_memory_budget_percent=50, reserve_mib=0)
+
+    decision = subject.admit("a", 100, 8000, total_mib=8192, context_mib=9000)
+
+    assert not decision
+    assert decision.reason == "OVER_BUDGET"

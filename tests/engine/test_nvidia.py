@@ -3,8 +3,9 @@
 Everything here needs a real CUDA device and ``onnxruntime-gpu``, so the suite runs only when
 ``EC_NVIDIA`` is set: the desktop RTX 5080 under WSL2 and ``lab-5950x``'s RTX 2080 Super. What it
 proves is what a CPU host cannot: that the session actually lands on ``CUDAExecutionProvider``,
-that the device accounting is real, that a CUDA session and a CPU session agree on the same image,
-and that the whole parent-to-cell path works through a spawned subprocess holding a CUDA context.
+that the device accounting is real and separates the CUDA context from the models it holds, that a
+CUDA session and a CPU session agree on the same image, and that the whole parent-to-cell path
+works through a spawned subprocess holding a CUDA context.
 """
 
 import hashlib
@@ -78,7 +79,13 @@ def test_a_session_actually_lands_on_the_cuda_provider(corpus):
     assert reply.providers_assigned[0] == CUDA_PROVIDER
     assert reply.gpu_device == str(DEVICE)
     assert reply.gpu_class
-    assert reply.device_mib > 0
+    # the first CUDA load establishes the device context, which is hundreds of MiB on both cards,
+    # and reports it apart from the model. The model itself is a synthetic graph, so its own
+    # footprint may round to nothing at NVML's granularity -- which is the point: it is no longer
+    # the context (DESIGN.md §10.2).
+    assert reply.context_mib > 0
+    assert reply.device_mib >= 0
+    assert state.context_mib == reply.context_mib
 
     loaded = state.sessions[DIGEST]
     assert loaded.use_io_binding is True
@@ -93,7 +100,9 @@ def test_a_session_actually_lands_on_the_cuda_provider(corpus):
 
     freed = handle_unload(state, Unload(DIGEST))
     assert freed.was_resident is True
-    assert freed.expected_mib > 0
+    assert freed.expected_mib == reply.device_mib, (
+        "an unload is judged against the model's own footprint, never against the context"
+    )
 
 
 def test_a_cuda_session_and_a_cpu_session_agree_on_the_same_image(corpus):
@@ -134,6 +143,27 @@ def test_a_cpu_only_machine_policy_is_refused_on_a_gpu_route(corpus):
     assert reply.code == "PROVIDER_REQUIRED_MISSING"
 
 
+def test_a_second_load_does_not_pay_for_the_context_again(corpus):
+    state = cuda_state()
+    first = handle_load(
+        state,
+        LoadModel(digest=DIGEST, bundle_root=bundle_root(corpus),
+                  providers=(CUDA_PROVIDER, CPU_PROVIDER), required_provider=CUDA_PROVIDER),
+    )
+    assert isinstance(first, Loaded), getattr(first, "error", "")
+    handle_unload(state, Unload(DIGEST))
+
+    second = handle_load(
+        state,
+        LoadModel(digest=DIGEST, bundle_root=bundle_root(corpus),
+                  providers=(CUDA_PROVIDER, CPU_PROVIDER), required_provider=CUDA_PROVIDER),
+    )
+
+    assert isinstance(second, Loaded), getattr(second, "error", "")
+    assert second.context_mib == 0, "the context was established once and stays"
+    assert state.context_mib == first.context_mib
+
+
 def test_nvml_reports_the_device_the_cell_runs_on():
     reading = NvmlProbe().snapshot(DEVICE)
     assert reading.total_mib > 0
@@ -157,6 +187,7 @@ def test_a_spawned_cuda_cell_serves_a_job_end_to_end(corpus):
         )
         assert isinstance(loaded, Loaded), getattr(loaded, "error", "")
         assert loaded.providers_assigned[0] == CUDA_PROVIDER
+        assert loaded.context_mib > 0, "a spawned cell measures its own context too"
 
         result = cell.call(Infer("spawned", str(path), digest, DIGEST, "1"), timeout_s=600.0)
         assert result.status == "SUCCEEDED", result.error

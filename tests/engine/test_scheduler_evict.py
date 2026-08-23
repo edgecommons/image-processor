@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from image_processor.engine.protocol import LoadModel, Unload
+from image_processor.engine.protocol import LoadModel, Unload, Unloaded
+from image_processor.engine.scheduler import _Pass
 from image_processor.ledger import Ledger
 from tests.engine.executor_support import DIGEST_A, DIGEST_B, FakeCell, admit_ready
 from tests.engine.test_scheduler import Harness
@@ -83,3 +84,78 @@ def test_a_cell_that_will_not_release_is_recycled_and_reported(ledger):
     assert outcome["evicted"] is False
     assert outcome["reason"] == "the cell did not release it"
     assert harness.supervisor.recycles, "the cell that would not release was recycled"
+
+
+# -- the context is not the model's to give back (DESIGN.md 10.4) -------------------------------
+
+
+def test_evicting_the_first_model_off_a_cell_that_built_a_context_does_not_recycle_it(ledger):
+    # the shape WP10 measured on both cards: a 271 MiB context and a 198 MiB model, and an unload
+    # that returns the model
+    cell = FakeCell(context_mib=271, load_mib=198)
+    harness = Harness(ledger, cells=[cell])
+    _resident(harness)
+    harness.scheduler._lanes[DIGEST_A].burst_remaining = 0
+
+    outcome = harness.scheduler.evict(DIGEST_A)
+
+    assert outcome["evicted"] is True
+    assert harness.supervisor.recycle_count == 0
+    assert harness.scheduler.counters["recycles"] == 0
+
+
+def test_an_unload_that_really_does_not_reclaim_still_recycles_the_cell(ledger):
+    # the same numbers with the context charged to the model, which is what the cell used to
+    # report: 198 MiB back out of 469, under the reclaim ratio, and the cell is recycled. The
+    # guard is intact; what changed is that a healthy cell no longer trips it.
+    cell = FakeCell(context_mib=271, load_mib=198)
+    harness = Harness(ledger, cells=[cell])
+    _resident(harness)
+    harness.scheduler._lanes[DIGEST_A].burst_remaining = 0
+    cell.on_unload = lambda message: Unloaded(
+        digest=message.digest, freed_mib=198, was_resident=True, expected_mib=469
+    )
+
+    harness.scheduler.evict(DIGEST_A)
+
+    assert harness.supervisor.recycle_count == 1
+
+
+def test_the_scheduler_learns_the_context_from_the_load_and_from_the_stats(ledger):
+    cell = FakeCell(context_mib=256, load_mib=512)
+    harness = Harness(ledger, cells=[cell])
+
+    assert harness.scheduler._context.get("gpu0-0", 0) == 0
+    _resident(harness)
+
+    assert harness.scheduler._context["gpu0-0"] == 256
+    assert harness.scheduler.status()["cells"][0]["contextMib"] == 256
+    assert harness.scheduler._resident["gpu0-0"][DIGEST_A].size_mib == 512
+
+
+def test_a_restarted_cell_holds_no_context_until_it_loads_again(ledger):
+    cell = FakeCell(context_mib=256, load_mib=512)
+    harness = Harness(ledger, cells=[cell])
+    _resident(harness)
+
+    harness.supervisor.recycle(cell, "a test restart")
+    harness.scheduler._memory(cell, _Pass(now_ms=harness.clock()))
+
+    assert harness.scheduler._context["gpu0-0"] == 0
+
+
+def test_the_context_is_taken_off_the_budget_when_a_model_is_admitted(ledger):
+    cell = FakeCell(context_mib=256, load_mib=512)
+    harness = Harness(ledger, cells=[cell])
+    _resident(harness)
+    seen: list = []
+    admit = harness.policy.admit
+    harness.policy.admit = lambda *args, **kwargs: (
+        seen.append(kwargs.get("context_mib")) or admit(*args, **kwargs)
+    )
+
+    admit_ready(harness.ledger, "01k5job0002", DIGEST_B)
+    harness.scheduler.submit(harness.ledger.get("01k5job0002"))
+    harness.scheduler.run_once()
+
+    assert seen and seen[0] == 256

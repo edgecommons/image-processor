@@ -159,7 +159,7 @@ state rather than an occurrence is raised and cleared as an alarm, and only on a
 | `model-activated` | info | A route switched to a new model generation. |
 | `executor-unavailable` | critical (alarm) | No healthy executor cell can serve the routes that need one. |
 | `executor-recycled` | warning | A cell was drained and restarted. |
-| `route-degraded` | critical (alarm) | An enabled, unpaused route cannot execute. |
+| `route-degraded` | critical (alarm) | An enabled, unpaused route cannot execute. `context.reason` names the cause: the staging, warmup, or activation failure of its model when it has one, otherwise the route's most recent condition. |
 | `queue-age-exceeded` | warning (alarm) | The oldest queued job passed `scheduler.queueAgeWarningSecs`. |
 | `publish-backlog` | warning (alarm) | The outbox is approaching `publish.outboxCapacity`. |
 | `publish-exhausted` | critical | A result spent `publish.maxAttempts`. The input is retained for an operator retry. |
@@ -239,13 +239,20 @@ serving the last known good model), `DEGRADED` (it cannot decide right now), or 
 | `trigger-rescan` | both | `{route?}` | `{route, discovered}` |
 | `preload-model` | component | `{id?, digest?}` | deferred: `{id, version, digest, staged, warmed, routesSwitched}` |
 | `evict-model` | component | `{digest}` | `{evicted, digest, cells, reason}`; a leased generation is `CONFLICT` |
-| `reload-model-catalog` | component | `{}` | deferred: `{routesSwitched, collected, models}` |
+| `reload-model-catalog` | component | `{}` | deferred: `{routesSwitched, requeued, collected, models}` |
 | `set-route-activation-override` | instance | `{enabled}` — `true`, `false`, or `null` to clear | `{route, configured, override, effective}` |
 | `retry-publication` | both | `{route?, inferenceId?}` | deferred: `{returned, published}` |
 | `retry-cleanup` | both | `{route?, inferenceId?}` | deferred: `{repaired, stillFailed}` |
 | `reconcile` | both | `{route?}` | deferred: `{reconciled, counts}` |
 | `pause` | both | `{route?}` | `{paused: true, routes}` |
 | `resume` | both | `{route?}` | `{paused: false, routes}` |
+
+A cell loads one model at a time, so `preload-model` refuses a load while the routes are busy and
+the command returns the failure. Retry it when the routes are idle or paused.
+
+`reload-model-catalog` re-verifies every configured model against the cache. A route whose entry
+holds up is a route whose configuration no longer blocks work, so the jobs it stranded in
+`BLOCKED_CONFIGURATION` return to `READY` and run again; `requeued` counts them.
 
 A component-scope verb addressed to an instance is refused before the handler runs, and so is an
 instance-scope verb that names no route on a component with several. A slow verb takes a deferred

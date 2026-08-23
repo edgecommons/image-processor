@@ -243,6 +243,7 @@ class Scheduler:
         self._inbox_lock = threading.Lock()
         self._lanes = {}
         self._resident = {}
+        self._context = {}
         self._retry = []
         self._paused = False
         self._stop = threading.Event()
@@ -610,6 +611,26 @@ class Scheduler:
                 total += stats.footprint_mib
         return total
 
+    def _device_context_mib(self, cell) -> int:
+        """Return the device context the cells on one device hold.
+
+        A context belongs to a cell, not to a model, and every cell on the device has its own, so
+        the budget carries the sum of them once rather than counting one again with every model
+        admitted against it (DESIGN.md §10.2).
+
+        Args:
+            cell: The cell handle.
+
+        Returns:
+            The total context in MiB.
+        """
+        total = 0
+        for other in self.supervisor.cells():
+            if other.device != cell.device:
+                continue
+            total += self._context.get(other.cell_id, 0)
+        return total
+
     def _leases(self, cell) -> set:
         """Return the digests that may not be evicted from one cell.
 
@@ -711,6 +732,9 @@ class Scheduler:
             return False
         state.free[cell.cell_id] = int(reply.device_free_mib or 0)
         state.total[cell.cell_id] = int(reply.device_total_mib or 0)
+        # The cell is the authority on its own context, including after a restart, when it holds
+        # none again until its next load.
+        self._context[cell.cell_id] = int(reply.context_mib or 0)
         records = self._resident_for(cell)
         for digest in list(records):
             if digest not in (reply.resident or ()):
@@ -722,6 +746,12 @@ class Scheduler:
 
     def _unload(self, cell, digest: str, state) -> bool:
         """Evict one session and account for what came back (DESIGN.md §10.4).
+
+        What the unload is judged against is the model's context-free footprint: the cell measures
+        a model from a baseline taken after its device context exists, so the context is in
+        neither ``expected_mib`` nor ``freed_mib``. An unload that returns most of the model is a
+        healthy cell; one that does not has a fragmented arena or a stuck runtime, and only then
+        is the cell recycled.
 
         Args:
             cell: The cell holding it.
@@ -970,6 +1000,7 @@ class Scheduler:
             state.free.get(cell.cell_id, 0),
             total_mib=state.total.get(cell.cell_id, 0),
             resident_mib=self._device_resident_mib(cell),
+            context_mib=self._device_context_mib(cell),
         )
 
     def _evict_for(self, cell, lane: Lane, admission, state) -> bool:
@@ -1035,6 +1066,8 @@ class Scheduler:
             self._retry_later(entry, f"UNEXPECTED_REPLY: {type(reply).__name__} answered a load")
             return "failed"
 
+        if reply.context_mib:
+            self._context[cell.cell_id] = int(reply.context_mib)
         self.policy.record_load(lane.digest, reply.device_mib, reply.load_ms)
         state.free[cell.cell_id] = max(
             state.free.get(cell.cell_id, 0) - int(reply.device_mib or 0), 0
@@ -1394,6 +1427,7 @@ class Scheduler:
                         "residentMib": {
                             digest: stats.footprint_mib for digest, stats in records.items()
                         },
+                        "contextMib": self._context.get(cell.cell_id, 0),
                         "leased": sorted(self._leases(cell)),
                     }
                 )
