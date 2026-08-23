@@ -98,7 +98,7 @@ may publish a duplicate, so consumers deduplicate on `inferenceId`.
 | `outputs` | Only the declared task family's collection is populated. Masks and tensors are never published; segmentation reports pixel counts and regions. |
 | `outputs.truncated` | Whether collections were bounded to fit the message budget. When it is `true`, `artifacts` names the sidecar holding the full result. |
 | `artifacts` | The evidence sidecar this result belongs to, present whenever the route writes one. |
-| `error` | `{code, message, class}` on a failure. `class` is `transient`, `permanent`, or `contaminating`. |
+| `error` | `{code, message, class}` on a failure. `class` is `transient`, `permanent`, or `contaminating`. A `permanent` failure repeats on every attempt; `code` says whether the image or the deployment caused it, and that is what decides the completion action. |
 
 A failed result is still published, because a consumer that hears nothing cannot tell a held image
 from a component that stopped:

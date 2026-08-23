@@ -313,7 +313,7 @@
         },
         "class": {
           "enum": ["transient", "permanent", "contaminating"],
-          "description": "How the failure is handled. `transient`: retried under the job's retry budget. `permanent`: the input can never succeed, so the job takes the invalid-input completion action. `contaminating`: the executor cell's CUDA context is unusable, so the cell drains and restarts and the job returns to retry."
+          "description": "How the failure is handled. `transient`: retried under the job's retry budget. `permanent`: every attempt fails the same way, so the job ends terminally; whether the input is quarantined or retained is decided by `code`, not by this class. `contaminating`: the executor cell's CUDA context is unusable, so the cell drains and restarts and the job returns to retry."
         }
       }
     },

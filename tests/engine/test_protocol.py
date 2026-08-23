@@ -245,3 +245,67 @@ def test_prefer_listed_demands_only_that_the_chosen_provider_is_permitted():
 
 def test_an_empty_permitted_list_places_no_restriction():
     assert verify_provider_assignment([CUDA_PROVIDER], (), REQUIRE_LISTED) == (CUDA_PROVIDER,)
+
+
+def test_only_the_input_codes_blame_the_image():
+    """The completion split: bad evidence may quarantine, a bad deployment may not."""
+    from image_processor.engine.protocol import INPUT_ERROR_CODES, is_input_error
+
+    for code in (
+        "UNREADABLE_IMAGE",
+        "EMPTY_IMAGE",
+        "IMAGE_DIMENSION_EXCEEDED",
+        "IMAGE_PIXELS_EXCEEDED",
+        "MULTI_FRAME_IMAGE",
+        "IMAGE_TOO_LARGE",
+        "UNSUPPORTED_PIXEL_FORMAT",
+        "IMAGE_UNDECODABLE",
+        "INPUT_DIGEST_MISMATCH",
+        "INPUT_TOO_LARGE",
+        "FILE_MISSING",
+    ):
+        assert is_input_error(code), code
+        assert code in INPUT_ERROR_CODES
+
+    for code in (
+        "MODEL_INVALID",
+        "UNSUPPORTED_MODEL",
+        "SHAPE_MISMATCH",
+        "INPUT_MISMATCH",
+        "PROVIDER_UNAVAILABLE",
+        "PROVIDER_POLICY",
+        "PROVIDER_CPU_ONLY",
+        "PROVIDER_NOT_PERMITTED",
+        "FAMILY_REFUSED",
+        "BUNDLE_INVALID",
+        "TRANSFORM_VERSION_MISMATCH",
+        "WARMUP_MISMATCH",
+        "PROTOCOL",
+        "UNCLASSIFIED",
+        "",
+    ):
+        assert not is_input_error(code), code
+
+    assert not is_input_error(None)
+
+
+def test_every_decode_refusal_is_an_input_error():
+    """A code `decode.py` raises and this table does not know would silently retain evidence."""
+    import ast
+    import inspect
+
+    from image_processor.engine import decode as module
+    from image_processor.engine.protocol import INPUT_ERROR_CODES
+
+    tree = ast.parse(inspect.getsource(module))
+    raised = {
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "DecodeError"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+    }
+    assert raised, "the decode module raises DecodeError with a literal code"
+    assert raised <= INPUT_ERROR_CODES, sorted(raised - INPUT_ERROR_CODES)

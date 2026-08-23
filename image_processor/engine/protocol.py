@@ -631,6 +631,47 @@ def classify_message(text) -> Optional[ErrorInfo]:
     return None
 
 
+#: The permanent codes that are a property of the input rather than of the deployment.
+#:
+#: Every :class:`~image_processor.engine.decode.DecodeError` code is here, together with the
+#: three the cell raises about the staged file itself. The codes are listed rather than imported
+#: because this module holds no dependency above :mod:`image_processor.types`; the decode suite
+#: asserts that every code ``decode.py`` raises appears in this set.
+INPUT_ERROR_CODES = frozenset(
+    {
+        "EMPTY_IMAGE",
+        "FILE_MISSING",
+        "IMAGE_DIMENSION_EXCEEDED",
+        "IMAGE_PIXELS_EXCEEDED",
+        "IMAGE_TOO_LARGE",
+        "IMAGE_UNDECODABLE",
+        "INPUT_DIGEST_MISMATCH",
+        "INPUT_TOO_LARGE",
+        "MULTI_FRAME_IMAGE",
+        "UNREADABLE_IMAGE",
+        "UNSUPPORTED_PIXEL_FORMAT",
+    }
+)
+
+
+def is_input_error(code) -> bool:
+    """Report whether one failure code blames the input image (DESIGN.md §15.2).
+
+    The distinction decides what happens to the file. An input that can never be decoded, that
+    does not hash to what its readiness evidence promised, or that is not there at all is bad
+    evidence, and a route may quarantine it. Every other permanent code -- a model, a bundle, a
+    provider, a GPU, a runtime, or a postprocess-schema failure -- says nothing about the image,
+    so the input is retained where it is and the deployment is repaired instead.
+
+    Args:
+        code: The stable SCREAMING_SNAKE code carried on the failure, or ``None``.
+
+    Returns:
+        Whether the code names an input failure.
+    """
+    return str(code or "") in INPUT_ERROR_CODES
+
+
 def classify_error(exc: BaseException) -> ErrorInfo:
     """Classify one exception raised while loading a model or running a job.
 
@@ -670,6 +711,7 @@ __all__ = [
     "CPU_PROVIDER",
     "CUDA_PROVIDER",
     "ERROR_CLASSES",
+    "INPUT_ERROR_CODES",
     "MAX_ERROR_CHARS",
     "PERMANENT",
     "PREFER_LISTED",
@@ -692,6 +734,7 @@ __all__ = [
     "bound_message",
     "classify_error",
     "classify_message",
+    "is_input_error",
     "normalize_policy",
     "verify_provider_assignment",
 ]

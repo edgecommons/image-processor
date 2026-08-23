@@ -488,6 +488,13 @@ Completion actions are spelled `archive | delete | retainInPlace | quarantine`, 
 intact, `suffix` installs the input beside the occupant under a deterministic digest-derived name.
 Neither overwrites the object already there. A route with no `failedDir` quarantines in place.
 
+Which failure took which action is decided by the failure code, not by the error class. Only an
+invalid or corrupt input takes `onInvalidInput`: the decode codes, an input digest that does not
+match the readiness evidence, an input over the byte bound, and an input that is not there. Model,
+bundle, configuration, provider, GPU, runtime, postprocess-schema, and publish failures take
+`onOperationalFailure` and raise the `evt` that asks an operator to repair the deployment; they
+never quarantine otherwise-good evidence.
+
 Validation is fail-closed: unknown fields, duplicate ids, unresolved model references, overlapping
 mutating roots, missing completion directories, provider policy, path containment, trigger roots,
 and output-schema mismatches reject the candidate (core candidate validator, reject-and-keep).

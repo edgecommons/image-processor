@@ -143,8 +143,8 @@ block, which is also where the archive and quarantine directories live.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `onSuccess` | action | `archive` | What happens to the input after the result is published and confirmed. |
-| `onInvalidInput` | action | `quarantine` | What happens to an input that can never succeed: a corrupt or undecodable image, a digest that does not match its sidecar, a reference that escapes its root. |
-| `onOperationalFailure` | action | `retainInPlace` | What happens when inference exhausts its retry budget. The input is intact, so retaining it keeps a later reprocess possible. |
+| `onInvalidInput` | action | `quarantine` | What happens to an input that can never succeed: a corrupt or undecodable image, a digest that does not match its sidecar, an input over the byte bound, an input that is no longer there, or a reference that escapes its root. |
+| `onOperationalFailure` | action | `retainInPlace` | What happens when inference exhausts its retry budget, and what happens to a permanent failure the image did not cause — a model, bundle, provider, GPU, runtime, or postprocess-schema failure. The input is intact, so retaining it keeps a later reprocess possible once you repair the deployment. |
 | `onPublishFailure` | `retainInPlace` | `retainInPlace` | What happens when publication exhausts its attempts. `retainInPlace` is the only value: the result is already committed and the outbox row is kept, so the input stays where it is until you run `retry-publication`. Any other value is rejected with `ON_PUBLISH_FAILURE_NOT_SUPPORTED`. |
 | `onCollision` | `fail` \| `suffix` | `fail` | What happens when an action's target path already holds a different object. `fail`: the job records `CLEANUP_FAILED` and both files are left intact, so it waits for `retry-cleanup` or an operator. `suffix`: the input is installed beside the occupant under a deterministic name derived from its own digest, so the move completes and the name is reproducible from the ledger. Neither policy overwrites the object already there. |
 

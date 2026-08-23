@@ -721,8 +721,10 @@ The result pipeline, in the order DESIGN.md 7 fixes: `_on_result` -> `build_resu
 and the correlated reply -> and, when the publisher confirms the gating row, `Completer.plan/apply`
 under `route.completion_for(job.source.kind)`. A terminal failure takes the same body builder, is
 published directly (the ledger accepts a committed result only from an in-flight job), and takes
-the failure completion -- with `onInvalidInput` rather than `onOperationalFailure` when the error
-class is `permanent`, which is what `schemas/inference-result.schema.json` says that class means.
+the failure completion -- with `onInvalidInput` rather than `onOperationalFailure` only when the
+error class is `permanent` **and** `engine/protocol.is_input_error(code)` says the image caused
+it. Every other permanent code takes `onOperationalFailure` and leaves the input where it is
+(DESIGN.md 11).
 A route with no `failedDir` quarantines in place, which is a retain with the terminal state
 recorded against it (DESIGN.md 11).
 
