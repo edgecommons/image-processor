@@ -156,6 +156,7 @@ def compare_detection(
     actual: Dict[str, Any],
     iou_min: float = IOU_MIN,
     score_tolerance: float = SCORE_TOLERANCE,
+    boundary_allowance: int = 0,
 ) -> List[str]:
     """Compare one detection record against its golden.
 
@@ -169,11 +170,16 @@ def compare_detection(
         actual: The answer this run produced, in the same shape.
         iou_min: Smallest accepted overlap between a recorded box and its match.
         score_tolerance: Largest accepted score difference.
+        boundary_allowance: How many unmatched boxes -- a golden entry with no match, or an
+            extra the golden does not record -- the record may carry before they count as
+            differences. Zero on the golden provider; a non-golden provider shifts NMS and
+            score-threshold boundaries, and a single flipped box is expected there.
 
     Returns:
         One message per difference. An empty list means the record matches.
     """
     problems: List[str] = []
+    boundary: List[str] = []
     expected = list(golden.get("detections") or [])
     observed = list(actual.get("detections") or [])
     unmatched = list(range(len(observed)))
@@ -183,7 +189,7 @@ def compare_detection(
         candidates = [index for index, value in overlaps.items() if value >= iou_min]
         if not candidates:
             best = max(overlaps.values(), default=0.0)
-            problems.append(
+            boundary.append(
                 f"detections[{position}] {entry['label']!r} at {entry['box']} has no match with "
                 f"IoU >= {iou_min}; the best overlap of that label is {best:.3f}"
             )
@@ -198,11 +204,13 @@ def compare_detection(
                 f"(difference {difference:.4f} > {score_tolerance})"
             )
     for index in unmatched:
-        problems.append(
+        boundary.append(
             f"the run found an extra {observed[index]['label']!r} at "
             f"{observed[index]['box']} scoring {observed[index]['score']}, "
             f"which the golden does not record"
         )
+    if len(boundary) > boundary_allowance:
+        problems.extend(boundary)
     return problems
 
 
@@ -243,7 +251,10 @@ def compare_segmentation(
 
 
 def compare_anomaly(
-    golden: Dict[str, Any], actual: Dict[str, Any], score_tolerance: float = ANOMALY_TOLERANCE
+    golden: Dict[str, Any],
+    actual: Dict[str, Any],
+    score_tolerance: float = ANOMALY_TOLERANCE,
+    relative: bool = False,
 ) -> List[str]:
     """Compare one anomaly record against its golden.
 
@@ -251,6 +262,9 @@ def compare_anomaly(
         golden: The recorded answer, with an ``anomaly`` object.
         actual: The answer this run produced, in the same shape.
         score_tolerance: Largest accepted score difference.
+        relative: Whether the tolerance also scales with the score's magnitude
+            (``max(score_tolerance, 0.001 * |score|)``). The anomaly score is unnormalized, so
+            an absolute tolerance recorded on one provider is too tight for another.
 
     Returns:
         One message per difference. An empty list means the record matches.
@@ -261,6 +275,9 @@ def compare_anomaly(
     if not expected or not observed:
         return ["anomaly is missing from the golden or from the run"]
     difference = abs(float(expected["score"]) - float(observed["score"]))
+    if relative:
+        magnitude = max(abs(float(expected["score"])), abs(float(observed["score"])))
+        score_tolerance = max(score_tolerance, 0.001 * magnitude)
     if difference > score_tolerance:
         problems.append(
             f"anomaly score is {observed['score']}, the golden records {expected['score']} "
@@ -282,7 +299,35 @@ COMPARISONS = {
 }
 
 
-def compare_record(family: str, golden: Dict[str, Any], actual: Dict[str, Any]) -> List[str]:
+#: Per-family comparison keywords for a provider the goldens were NOT recorded on. The goldens
+#: are CPU-recorded (the golden provider gets an empty profile); another provider is held to the
+#: same answers with a bounded allowance for numeric boundary effects: one flipped box per image
+#: and a relative anomaly tolerance. Decision outcomes are never given an allowance.
+NON_GOLDEN_PROFILE: Dict[str, Dict[str, Any]] = {
+    "detection": {"iou_min": 0.85, "score_tolerance": 0.1, "boundary_allowance": 1},
+    "anomaly": {"relative": True},
+}
+
+
+def comparison_profile(provider: str, golden_provider: str = "CPUExecutionProvider") -> Dict[str, Dict[str, Any]]:
+    """Return the per-family comparison keywords for a run on ``provider``.
+
+    Args:
+        provider: The execution provider the run used.
+        golden_provider: The provider the goldens were recorded on.
+
+    Returns:
+        An empty mapping on the golden provider, :data:`NON_GOLDEN_PROFILE` otherwise.
+    """
+    return {} if provider == golden_provider else NON_GOLDEN_PROFILE
+
+
+def compare_record(
+    family: str,
+    golden: Dict[str, Any],
+    actual: Dict[str, Any],
+    profile: Dict[str, Dict[str, Any]] | None = None,
+) -> List[str]:
     """Compare one image's record against its golden, with the family's tolerances.
 
     The decision outcome is compared for every family: a change in the answer that leaves the
@@ -300,7 +345,8 @@ def compare_record(family: str, golden: Dict[str, Any], actual: Dict[str, Any]) 
     Raises:
         KeyError: When the family has no comparison, which means a family was added without one.
     """
-    problems = list(COMPARISONS[family](golden, actual))
+    keywords = dict((profile or {}).get(family) or {})
+    problems = list(COMPARISONS[family](golden, actual, **keywords))
     expected = (golden.get("decision") or {}).get("outcome")
     observed = (actual.get("decision") or {}).get("outcome")
     if expected != observed:

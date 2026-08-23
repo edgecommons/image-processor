@@ -39,7 +39,13 @@ def run_corpus(staged: Callable, key: str, images: List[Path], name_of: Callable
     return model, records
 
 
-def check(model, records: List[Dict], update: bool, golden_dir: Path = update_goldens.GOLDEN_DIR):
+def check(
+    model,
+    records: List[Dict],
+    update: bool,
+    golden_dir: Path = update_goldens.GOLDEN_DIR,
+    provider: str = runner.CPU_PROVIDER,
+):
     """Assert the records against the model's golden, or write the golden from them.
 
     Args:
@@ -47,6 +53,9 @@ def check(model, records: List[Dict], update: bool, golden_dir: Path = update_go
         records: The per-image records.
         update: Whether this run writes the golden instead of asserting it.
         golden_dir: Where the goldens live.
+        provider: The execution provider the records came from. The golden provider is held
+            exactly to the goldens; another provider gets the bounded
+            :data:`tools.update_goldens.NON_GOLDEN_PROFILE` allowance.
 
     Returns:
         The golden that was asserted against or written.
@@ -73,7 +82,7 @@ def check(model, records: List[Dict], update: bool, golden_dir: Path = update_go
     problems: List[str] = []
     for name in sorted(expected):
         for message in update_goldens.compare_record(
-            model.family, expected[name], observed[name]
+            model.family, expected[name], observed[name], update_goldens.comparison_profile(provider)
         ):
             problems.append(f"{name}: {message}")
     assert not problems, "\n".join([f"{model.key} differs from its golden:"] + problems)

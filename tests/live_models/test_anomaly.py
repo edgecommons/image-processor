@@ -37,11 +37,11 @@ def require_built_model(patchcore_build):
         )
 
 
-def test_anomaly_matches_its_golden(staged, visa_capsule_images, update_goldens_mode):
+def test_anomaly_matches_its_golden(staged, visa_capsule_images, update_goldens_mode, provider):
     """The staged PatchCore reproduces its committed golden on the capsules slice."""
     model, records = verify.run_corpus(staged, KEY, visa_capsule_images, relative_name)
     assert len(records) == len(visa_capsule_images)
-    verify.check(model, records, update_goldens_mode)
+    verify.check(model, records, update_goldens_mode, provider=provider)
 
 
 def test_the_bad_split_scores_higher_than_the_good_split(staged, visa_capsule_images):

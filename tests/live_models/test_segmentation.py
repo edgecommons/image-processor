@@ -19,11 +19,11 @@ from tests.live_models import verify
 require_live_models()
 
 
-def test_segmentation_matches_its_golden(staged, coco_images, update_goldens_mode):
+def test_segmentation_matches_its_golden(staged, coco_images, update_goldens_mode, provider):
     """The staged FCN reproduces its committed golden on the COCO slice."""
     model, records = verify.run_corpus(staged, "fcn-resnet50-12", coco_images, relative_name)
     assert len(records) == len(coco_images)
-    verify.check(model, records, update_goldens_mode)
+    verify.check(model, records, update_goldens_mode, provider=provider)
 
 
 def test_every_voc_class_is_reported(staged, coco_images):

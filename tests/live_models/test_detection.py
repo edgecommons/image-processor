@@ -21,11 +21,11 @@ DETECTORS = ["yolox-nano", "yolox-s", "ssd-mobilenetv1-12"]
 
 
 @pytest.mark.parametrize("key", DETECTORS)
-def test_detector_matches_its_golden(key, staged, coco_images, update_goldens_mode):
+def test_detector_matches_its_golden(key, staged, coco_images, update_goldens_mode, provider):
     """The staged detector reproduces its committed golden on the COCO slice."""
     model, records = verify.run_corpus(staged, key, coco_images, relative_name)
     assert len(records) == len(coco_images)
-    verify.check(model, records, update_goldens_mode)
+    verify.check(model, records, update_goldens_mode, provider=provider)
 
 
 @pytest.mark.parametrize("key", DETECTORS)

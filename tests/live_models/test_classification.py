@@ -31,12 +31,12 @@ def wordnet_to_label():
 
 
 @pytest.mark.parametrize("key", CLASSIFIERS)
-def test_classifier_matches_its_golden(key, staged, imagenette_images, update_goldens_mode):
+def test_classifier_matches_its_golden(key, staged, imagenette_images, update_goldens_mode, provider):
     """The staged classifier reproduces its committed golden on the Imagenette slice."""
     model, records = verify.run_corpus(staged, key, imagenette_images, relative_name)
     assert len(records) == len(imagenette_images)
     assert all(len(entry["classes"]) == 5 for entry in records)
-    verify.check(model, records, update_goldens_mode)
+    verify.check(model, records, update_goldens_mode, provider=provider)
 
 
 @pytest.mark.parametrize("key", CLASSIFIERS)
