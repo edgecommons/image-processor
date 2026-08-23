@@ -1,19 +1,25 @@
 # HOST platform pack for ImageProcessor.
 #
-# Runs the component exactly the way the README's "Run locally (HOST platform, MQTT transport)"
-# section does — --platform HOST --transport MQTT <messaging config> -c FILE <config> -t <thing> —
-# but containerized, against a throw-away EMQX broker on the compose network.
+# Runs the component the way the README's quick start does — --platform HOST --transport MQTT
+# <messaging config> -c FILE <config> -t <thing> — but containerized, against a throw-away EMQX
+# broker on the compose network.
 #
 #   docker compose up --build          # build the image (./Dockerfile) and start broker + component
 #   docker compose logs -f image-processor
 #   docker compose down -v
 #
-# Watch the route's input and output (the library publishes the state keepalive automatically):
-#   mosquitto_sub -h localhost -p 1883 -t 'ecv1/+/+/+/state' -t 'ecv1/+/+/+/data/#' -v
+# Watch what it publishes (the library publishes the state keepalive automatically):
+#   mosquitto_sub -h localhost -p 1883 -v \
+#     -t 'ecv1/+/image-processor/+/app/inference/result' \
+#     -t 'ecv1/+/image-processor/+/data/#' \
+#     -t 'ecv1/+/image-processor/+/evt/#' \
+#     -t 'ecv1/+/image-processor/state'
 #
-# Feed it something to process — anything matching the route's `subscribe` filter will do:
-#   mosquitto_pub -h localhost -p 1883 -t 'ecv1/gw-01/sim/main/data/temperature-1' \
-#     -m '{"header":{"name":"SouthboundSignalUpdate","version":"1.0"},"body":{"signal":{"id":"temperature-1"},"samples":[{"value":21.5}]}}'
+# Give it something to infer on: stage a model bundle into ./volumes/lib/image-processor/bundles/
+# whose digest matches `models[].digest` in test-configs/config.json, then drop a camera-shaped
+# image and its `<image>.json` sidecar into ./volumes/spool/cam-01/ (sidecar first). Ask it a
+# question over the bus with ec-uns-cmd:
+#   ec-uns-cmd --device image-processor-dev --component image-processor status
 #
 # The device (thing) name defaults to image-processor-dev; override with THING_NAME=... docker compose up.
 name: image-processor
@@ -58,6 +64,12 @@ services:
     volumes:
       # The component config source (-c FILE ...). Edit test-configs/ on the host and restart.
       - ./test-configs:/etc/edgecommons/test-configs:ro
+      # The durable state, the model cache, and the staged bundles the routes are pinned to.
+      - ./volumes/lib:/var/lib/edgecommons
+      # The camera spool the component owns, and where it archives and quarantines what it read.
+      - ./volumes/spool:/var/spool/camera-adapter
+      - ./volumes/processed:/var/spool/image-processor
+      - ./volumes/inspection:/var/spool/inspection
     configs:
       - source: messaging
         target: /etc/edgecommons/standalone-messaging.json

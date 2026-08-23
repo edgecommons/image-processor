@@ -3,10 +3,14 @@
 # carries BOTH the component config AND the messaging block (in-cluster broker via Service DNS).
 # Edit this and `kubectl apply -f k8s/` to drive a hot reload. Point host at your broker Service.
 #
-# A processor with no routes has nothing to run and refuses to start — deliberately: a processor that
-# silently does nothing is worse. So one working route is declared below. `publishTopic` must name
-# THIS device: on Kubernetes the device token is the pod's resolved identity (Downward API), so set
-# it to the pod name you deploy under.
+# The paths below are container paths: mount a PersistentVolume at /var/lib/edgecommons for the
+# ledger and the model cache, and the camera spool at /var/spool/camera-adapter. A route whose
+# spool is not mounted reports itself degraded rather than pretending it has nothing to do.
+#
+# `runtime.providers` names the CPU provider and `gpu.devices` is empty, which is the development
+# profile: it needs `allowCpuOnly` and it is not what a decision-serving deployment runs. A GPU
+# deployment names its devices, drops `allowCpuOnly`, and requests `nvidia.com/gpu` in
+# k8s/deployment.yaml.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -16,6 +20,10 @@ metadata:
 data:
   config.json: |-
     {
+      "logging": {
+        "level": "INFO",
+        "python_format": "%(asctime)s [%(levelname)s] %(filename)s %(funcName)s(%(lineno)d) [%(threadName)s]: %(message)s"
+      },
       "hierarchy": {
         "levels": [
           "site",
@@ -23,18 +31,16 @@ data:
         ]
       },
       "identity": {
-        "site": "site1"
+        "site": "factory-1"
       },
-      "messaging": {
-        "local": {
-          "type": "mqtt",
-          "host": "emqx.default.svc.cluster.local",
-          "port": 1883,
-          "clientId": "image-processor"
-        }
-      },
-      "logging": {
-        "level": "INFO"
+      "heartbeat": {
+        "enabled": true,
+        "intervalSecs": 5,
+        "measures": {
+          "cpu": true,
+          "memory": true
+        },
+        "destination": "local"
       },
       "metricEmission": {
         "target": "log",
@@ -43,32 +49,164 @@ data:
       "component": {
         "token": "image-processor",
         "global": {
-          "defaults": {
-            "tickMs": 10000,
-            "maxQueue": 256
+          "paths": {
+            "stateDb": "/var/lib/edgecommons/image-processor/state.db",
+            "modelCache": "/var/lib/edgecommons/image-processor/models",
+            "staging": "/var/lib/edgecommons/image-processor/staging"
+          },
+          "runtime": {
+            "providers": [
+              "CPUExecutionProvider"
+            ],
+            "requiredProvider": "CPUExecutionProvider",
+            "allowCpuOnly": true,
+            "executorCellsPerGpu": 1,
+            "loadConcurrencyPerGpu": 1
+          },
+          "gpu": {
+            "devices": [],
+            "residentMemoryBudgetPercent": 80,
+            "reserveMiB": 512
+          },
+          "scheduler": {
+            "maxBatchSize": 1,
+            "maxBatchLatencyMs": 20,
+            "hotTtlSecs": 120,
+            "minResidencySecs": 15,
+            "maxAttempts": 5,
+            "retryBackoffSecs": 2,
+            "maxRetryBackoffSecs": 60,
+            "queueAgeWarningSecs": 300
+          },
+          "discovery": {
+            "rescanSecs": 15,
+            "debounceMs": 250
+          },
+          "publish": {
+            "confirmationTimeoutSecs": 10,
+            "requireConfirmationBeforeCleanup": true,
+            "maxAttempts": 20,
+            "outboxCapacity": 10000,
+            "outboxReserveBudgetMiB": 64
+          },
+          "modelSources": {
+            "allowedSchemes": [
+              "file"
+            ],
+            "allowedUriPrefixes": [],
+            "verifyTls": true
+          },
+          "signing": {
+            "required": false,
+            "trustedKeys": []
+          },
+          "models": [
+            {
+              "id": "synthetic-anomaly-scalar",
+              "version": "1.0.0",
+              "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00",
+              "uri": "/var/lib/edgecommons/image-processor/bundles/synthetic-anomaly-scalar-1.0.0.tar",
+              "activation": {
+                "requireWarmup": true,
+                "retainForRollback": true
+              }
+            }
+          ],
+          "completionDefaults": {
+            "onSuccess": "archive",
+            "onInvalidInput": "quarantine",
+            "onOperationalFailure": "retainInPlace",
+            "onPublishFailure": "retainInPlace",
+            "onCollision": "fail"
           }
         },
         "instances": [
           {
-            "id": "rollup",
-            "subscribe": [
-              "ecv1/+/+/+/data/#"
-            ],
-            "publishTopic": "ecv1/gw-01/image-processor/rollup/data/summary",
-            "target": "local",
-            "pipeline": [
-              {
-                "fieldEquals": {
-                  "path": "signal.id",
-                  "value": "temperature-1"
-                }
+            "id": "clearance-cam-01",
+            "priority": 100,
+            "source": {
+              "kind": "spool",
+              "root": "/var/spool/camera-adapter/cam-01",
+              "include": [
+                "**/*.jpg",
+                "**/*.jpeg",
+                "**/*.png"
+              ],
+              "readiness": {
+                "mode": "cameraSidecar"
               },
-              {
-                "countPerTick": {}
+              "camera": {
+                "component": "camera-adapter",
+                "instance": "cam-01",
+                "subscribeAnnouncements": true,
+                "reconcileCaptureStatusSecs": 30
               }
-            ],
-            "tickMs": 10000
+            },
+            "modelRef": {
+              "id": "synthetic-anomaly-scalar",
+              "version": "1.0.0",
+              "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00"
+            },
+            "outputs": {
+              "writeResultSidecar": true,
+              "decisionSignals": [
+                {
+                  "id": "line-clearance/pass",
+                  "value": "$.decision.pass"
+                },
+                {
+                  "id": "line-clearance/confidence",
+                  "value": "$.decision.confidence"
+                },
+                {
+                  "id": "line-clearance/status",
+                  "value": "$.status"
+                }
+              ]
+            },
+            "completion": {
+              "onSuccess": "archive",
+              "archiveDir": "/var/spool/image-processor/processed/cam-01",
+              "failedDir": "/var/spool/image-processor/failed/cam-01"
+            }
+          },
+          {
+            "id": "adhoc-inspect",
+            "priority": 50,
+            "source": {
+              "kind": "trigger",
+              "subscribe": [
+                "ecv1/+/inspection-ui/+/app/inspect/request"
+              ],
+              "fileRoot": "/var/spool/inspection",
+              "inlineStaging": "/var/lib/edgecommons/image-processor/staging/adhoc"
+            },
+            "modelRef": {
+              "id": "synthetic-anomaly-scalar",
+              "version": "1.0.0",
+              "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00"
+            },
+            "outputs": {
+              "writeResultSidecar": false,
+              "decisionSignals": [
+                {
+                  "id": "adhoc/pass",
+                  "value": "$.decision.pass"
+                }
+              ]
+            },
+            "completion": {
+              "onSuccess": "delete"
+            }
           }
         ]
+      },
+      "messaging": {
+        "local": {
+          "type": "mqtt",
+          "host": "emqx.default.svc.cluster.local",
+          "port": 1883,
+          "clientId": "image-processor"
+        }
       }
     }
