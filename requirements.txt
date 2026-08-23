@@ -18,4 +18,6 @@ jsonschema>=4.21
 numpy>=1.26
 pillow>=10
 jsonpath-ng>=1.6
+# The CPU ONNX Runtime (the `cpu` extra). A GPU host installs `.[gpu,nvml]` instead of this file:
+# `onnxruntime` and `onnxruntime-gpu` ship the same package and must never both be installed.
 onnxruntime>=1.17

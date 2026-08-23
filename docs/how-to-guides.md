@@ -343,7 +343,9 @@ these libraries before it creates a session.
 
 1. Create a Linux (or WSL2) virtual environment with Python 3.12:
    `uv venv --python 3.12 ~/ip-gpu-venv && source ~/ip-gpu-venv/bin/activate`
-2. Install the component with the GPU extras and the CUDA 13 runtime:
+2. Install the component with the GPU extras and the CUDA 13 runtime (never together with the
+   CPU wheel -- `onnxruntime` and `onnxruntime-gpu` ship the same package, so do not install
+   `requirements.txt` or the `cpu` extra in this environment):
    `pip install -e '.[gpu,nvml]' 'nvidia-cuda-runtime==13.*' 'nvidia-cublas==13.*' 'nvidia-cuda-nvrtc==13.*' 'nvidia-cufft==12.*' 'nvidia-curand==10.*' nvidia-cudnn-cu13 'nvidia-nvjitlink==13.*'`
 3. Confirm the provider: `python -c "import onnxruntime as o; o.preload_dlls(); print(o.get_available_providers())"`
    lists `CUDAExecutionProvider`.

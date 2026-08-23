@@ -16,7 +16,7 @@ and no camera.
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e . -r requirements-test.txt
+pip install -e ".[cpu]" -r requirements-test.txt
 ```
 
 ## 2. Build a model bundle

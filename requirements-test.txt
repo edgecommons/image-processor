@@ -6,3 +6,8 @@ pytest-cov
 # WP4a -- the synthetic-graph fixture builder (tests/fixtures/build.py). Test-only: the
 # runtime imports onnxruntime, never onnx.
 onnx>=1.15
+
+# The CPU ONNX Runtime for the tier-1 parity suite (D-IP-14). The reusable component CI installs
+# `pip install -e . -r requirements-test.txt`; the package itself declares no runtime (see
+# pyproject.toml), so the test requirements name the CPU wheel.
+onnxruntime>=1.17

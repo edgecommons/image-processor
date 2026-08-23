@@ -101,7 +101,13 @@ def onnxruntime_module():
     """
     global _ORT
     if _ORT is None:
-        import onnxruntime
+        try:
+            import onnxruntime
+        except ImportError as error:
+            raise RuntimeError(
+                "no ONNX Runtime is installed: install the component with the `cpu` extra "
+                "(`pip install '.[cpu]'`) or the `gpu` extra (`pip install '.[gpu,nvml]'`), never both"
+            ) from error
 
         # onnxruntime-gpu finds CUDA, cuBLAS, and cuDNN through the NVIDIA pip packages only after
         # ``preload_dlls()`` has loaded them into this process; without it the CUDA provider

@@ -27,7 +27,7 @@ You need a local MQTT broker (`docker run -d -p 1883:1883 --name emqx emqx/emqx:
 
    ```bash
    python3 -m venv .venv && . .venv/bin/activate
-   pip install -e . -r requirements-test.txt
+   pip install -e ".[cpu]" -r requirements-test.txt
    ```
 
 2. Build the test corpus and pack the model bundle `test-configs/config.json` pins. The corpus is
