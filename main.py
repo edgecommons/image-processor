@@ -1,8 +1,9 @@
-"""ImageProcessor entry point -- a processing component on edgecommons.
+"""ImageProcessor entry point -- the EdgeCommons image inference component.
 
-Builds the framework, then hands control to the app: one route per ``component.instances[]`` entry,
-each with its own bounded queue, pipeline and worker thread. The library owns SIGTERM/SIGINT ->
-graceful shutdown.
+Builds the framework, registers the configuration validator and the component command verbs, then
+hands control to the app. The library owns SIGTERM and SIGINT: it flips readiness, unsubscribes,
+and closes messaging, while the app own ``stop`` drains the sources, the scheduler, the outbox,
+and the ledger in that order.
 
 Run locally (HOST platform, MQTT transport, against a local MQTT broker):
 
@@ -17,29 +18,44 @@ import sys
 
 from edgecommons import EdgeCommonsBuilder
 
+from image_processor.commands import DeferredApp, ProcessorCommands
+from image_processor.config import register as register_validator
 from image_processor.ImageProcessor import ImageProcessor
 
 logger = logging.getLogger("main")
 
 
 def main():
-    arg_parser = argparse.ArgumentParser(description="com.mbreissi.edgecommons.ImageProcessor -- a processing component")
+    arg_parser = argparse.ArgumentParser(
+        description="com.mbreissi.edgecommons.ImageProcessor -- an image inference component"
+    )
     # add any component specific arguments here
 
-    gg = (
+    # The verbs are registered while the runtime builds, so no early request finds a missing
+    # verb; the component they act on is bound the moment it exists.
+    deferred = DeferredApp()
+    commands = ProcessorCommands(deferred)
+
+    builder = (
         EdgeCommonsBuilder.create("com.mbreissi.edgecommons.ImageProcessor")
         .with_args(sys.argv[1:])
         .with_app_options(arg_parser)
-        # Ask the transport not to hand us our own publishes back. Greengrass IPC honours this;
-        # an MQTT broker cannot -- it redelivers our own publishes to our own wildcard subscription
-        # like anyone else's. That is why the self-echo guard in image_processor/pipeline.py is not optional.
+        # Nothing this component publishes is anything it consumes: it reads images from a spool
+        # or a trigger topic and answers on its own `app` channel. The transport is asked not to
+        # echo anyway, so a wildcard trigger filter never picks up this component own output.
         .receive_own_messages(False)
-        .build()
+        .configure_commands(commands.register)
     )
-    # Not ready until the routes are subscribed and running (the app flips this in run()).
+    # Reject a configuration that would corrupt evidence or infer on another component files
+    # BEFORE it becomes current (validate-then-apply, reject-and-keep).
+    register_validator(builder)
+
+    gg = builder.build()
+    # Not ready until the executor, the ledger, the sources, the scheduler, the outbox publisher,
+    # and at least one activated model generation are all up (the app flips this in run()).
     gg.set_ready(False)
 
-    app = ImageProcessor(gg)
+    app = deferred.bind(ImageProcessor(gg))
     try:
         app.run()
     finally:
