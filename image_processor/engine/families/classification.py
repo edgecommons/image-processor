@@ -25,6 +25,7 @@ from image_processor.engine.families import (
     preprocess_image,
     static_dim,
     validate_preprocess,
+    single_output,
 )
 from image_processor.types import BundleManifest, ClassScore, Family, NormalizedOutput
 
@@ -54,12 +55,7 @@ class ClassificationFamily:
         if Family(m.family) is not self.family:
             raise FamilyError("FAMILY_MISMATCH", f"manifest family is {m.family!r}")
         validate_preprocess(m)
-        if len(m.outputs) != 1:
-            raise FamilyError(
-                "UNSUPPORTED_OUTPUT_COUNT",
-                f"classification reads one output, manifest declares {len(m.outputs)}",
-            )
-        spec = m.outputs[0]
+        spec = single_output(m, "classification")
         rank = len(tuple(spec.shape))
         if rank not in (1, 2):
             raise FamilyError(

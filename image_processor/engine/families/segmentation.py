@@ -32,6 +32,7 @@ from image_processor.engine.families import (
     resize_plan,
     static_dim,
     validate_preprocess,
+    single_output,
 )
 from image_processor.types import BundleManifest, Family, NormalizedOutput
 
@@ -51,7 +52,7 @@ def _class_axis(m: BundleManifest, layout: str):
     Returns:
         The declared class count, or ``None`` when the output is rank 2 or the axis is dynamic.
     """
-    spec = m.outputs[0]
+    spec = single_output(m, "segmentation")
     if len(tuple(spec.shape)) < 3:
         return 1
     return static_dim(spec, -3 if layout == "NCHW" else -1)
@@ -129,12 +130,7 @@ class SegmentationFamily:
         if Family(m.family) is not self.family:
             raise FamilyError("FAMILY_MISMATCH", f"manifest family is {m.family!r}")
         validate_preprocess(m)
-        if len(m.outputs) != 1:
-            raise FamilyError(
-                "UNSUPPORTED_OUTPUT_COUNT",
-                f"segmentation reads one output, manifest declares {len(m.outputs)}",
-            )
-        spec = m.outputs[0]
+        spec = single_output(m, "segmentation")
         rank = len(tuple(spec.shape))
         if rank not in (2, 3, 4):
             raise FamilyError(

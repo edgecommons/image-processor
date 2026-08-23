@@ -28,6 +28,7 @@ from image_processor.engine.families import (
     preprocess_image,
     resize_plan,
     validate_preprocess,
+    single_output,
 )
 from image_processor.types import BundleManifest, Family, NormalizedOutput
 
@@ -134,11 +135,6 @@ class AnomalyFamily:
         if Family(m.family) is not self.family:
             raise FamilyError("FAMILY_MISMATCH", f"manifest family is {m.family!r}")
         validate_preprocess(m)
-        if len(m.outputs) != 1:
-            raise FamilyError(
-                "UNSUPPORTED_OUTPUT_COUNT",
-                f"anomaly reads one output, manifest declares {len(m.outputs)}",
-            )
         params = dict(m.family_params or {})
         source = choice(params, "source", ANOMALY_SOURCES, "scalar", "UNSUPPORTED_ANOMALY_SOURCE")
         choice(params, "activation", ("none", "sigmoid"), "none", "UNSUPPORTED_ACTIVATION")
@@ -152,7 +148,7 @@ class AnomalyFamily:
         _threshold(params)
         _normalization(params)
 
-        spec = m.outputs[0]
+        spec = single_output(m, "anomaly")
         shape = tuple(spec.shape)
         rank = len(shape)
         if source == "scalar":

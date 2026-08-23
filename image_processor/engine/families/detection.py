@@ -43,6 +43,7 @@ from image_processor.engine.families import (
     resize_plan,
     static_dim,
     validate_preprocess,
+    single_output,
 )
 from image_processor.types import BundleManifest, Detection, Family, NormalizedOutput
 
@@ -252,12 +253,7 @@ class DetectionFamily:
         Raises:
             FamilyError: When the single output does not match the grid the strides describe.
         """
-        if len(m.outputs) != 1:
-            raise FamilyError(
-                "UNSUPPORTED_OUTPUT_COUNT",
-                f"yoloxGrid reads one output, manifest declares {len(m.outputs)}",
-            )
-        spec = m.outputs[0]
+        spec = single_output(m, "yoloxGrid")
         rank = len(tuple(spec.shape))
         if rank not in (2, 3):
             raise FamilyError(

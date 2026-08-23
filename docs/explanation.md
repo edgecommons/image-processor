@@ -171,3 +171,36 @@ staging under a name derived from the digest, written to a hidden temporary file
 moved into place atomically, so a reader never sees a partial staged file. Naming by digest is what
 makes staging idempotent: the same bytes always land on the same path, so the same input admitted
 twice, or a retry after a crash, reuses the file already there.
+
+## Test tiers
+
+Testing an inference component pulls in two directions. A test that proves the arithmetic wants a
+model whose answer is known in advance; a test that proves the plumbing wants a model somebody
+really exported. `DESIGN.md` §16.1 splits them into four tiers so neither compromises the other.
+
+**Tier 1** builds its own ONNX graphs with `onnx.helper` and fixed weights, one per task family,
+and its own images with Pillow. The expected answer is computed arithmetically rather than recorded
+from a previous run, so a passing test means the preprocessing, the head decoding, the suppression,
+and the decision rules are right, not merely unchanged. Nothing is downloaded and nothing binary is
+committed, which is what lets the tier run on every pull request under the 90% coverage gate.
+
+**Tier 2** runs real exports: MobileNetV2 and ResNet-50, YOLOX-Nano and YOLOX-S, SSD-MobileNetV1,
+FCN-ResNet50, and a PatchCore built on VisA capsules. Real exports carry the conventions a synthetic
+graph never does — YOLOX's BGR letterbox onto a grey canvas, SSD's one-based category ids and
+already-suppressed boxes, an auxiliary segmentation head the family must not read. The answers are
+compared to committed JSON goldens under tolerances rather than for equality, because the same graph
+gives slightly different last digits on a different runtime build. Models and images are pinned by
+URL and SHA-256 in `tests/assets.json` and cached under `tests/.cache/`; the licenses are permissive,
+which is why YOLOv8 and YOLO11 (AGPL-3.0) and MVTec AD (CC BY-NC) are not in the corpus.
+
+**Tier 3** measures residency and burst behavior on real GPUs, against a synthesized corpus of
+bundles sized past what the card holds. Real models cannot supply it: the point is to overcommit the
+device, and that takes more bundles at controlled sizes than any public collection offers.
+
+**Tier 4** runs the whole system — camera-adapter, the processor, file-replicator, uns-bridge, and
+edge-console — on procedurally rendered line-clearance scenes and on VisA, replayed through the real
+camera path by the `sim` backend's playlist pattern.
+
+Each tier answers a question the others cannot. Tier 1 says the arithmetic is right, tier 2 says
+real models are read correctly, tier 3 says the device stays inside its memory, and tier 4 says the
+components agree with each other.

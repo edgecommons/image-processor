@@ -1,0 +1,1236 @@
+{
+  "bundle": {
+    "assetId": "model-yolox-nano",
+    "modelId": "yolox-nano",
+    "version": "0.1.1rc0"
+  },
+  "family": "detection",
+  "images": [
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.010698,
+            0.391215,
+            0.233172,
+            0.226214
+          ],
+          "index": 62,
+          "label": "tv",
+          "score": 0.894178
+        },
+        {
+          "box": [
+            0.668381,
+            0.385356,
+            0.067195,
+            0.312866
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.678756
+        },
+        {
+          "box": [
+            0.576633,
+            0.499882,
+            0.113132,
+            0.244814
+          ],
+          "index": 56,
+          "label": "chair",
+          "score": 0.673074
+        },
+        {
+          "box": [
+            0.456566,
+            0.528253,
+            0.096535,
+            0.244916
+          ],
+          "index": 56,
+          "label": "chair",
+          "score": 0.601278
+        },
+        {
+          "box": [
+            0.700844,
+            0.282927,
+            0.019986,
+            0.05131
+          ],
+          "index": 74,
+          "label": "clock",
+          "score": 0.572819
+        },
+        {
+          "box": [
+            0.458103,
+            0.503272,
+            0.208175,
+            0.266794
+          ],
+          "index": 60,
+          "label": "dining table",
+          "score": 0.468434
+        },
+        {
+          "box": [
+            0.59985,
+            0.411164,
+            0.031772,
+            0.09014
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.384947
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000139.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.0,
+            0.100372,
+            0.991785,
+            0.898544
+          ],
+          "index": 21,
+          "label": "bear",
+          "score": 0.929659
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000285.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.003247,
+            0.582036,
+            0.613902,
+            0.40289
+          ],
+          "index": 59,
+          "label": "bed",
+          "score": 0.877064
+        },
+        {
+          "box": [
+            0.532573,
+            0.466826,
+            0.139148,
+            0.264088
+          ],
+          "index": 58,
+          "label": "potted plant",
+          "score": 0.79018
+        },
+        {
+          "box": [
+            0.38878,
+            0.478361,
+            0.157776,
+            0.175806
+          ],
+          "index": 56,
+          "label": "chair",
+          "score": 0.523005
+        },
+        {
+          "box": [
+            0.672603,
+            0.499486,
+            0.183979,
+            0.100086
+          ],
+          "index": 73,
+          "label": "book",
+          "score": 0.422122
+        },
+        {
+          "box": [
+            0.281097,
+            0.274141,
+            0.093149,
+            0.203831
+          ],
+          "index": 58,
+          "label": "potted plant",
+          "score": 0.385078
+        },
+        {
+          "box": [
+            0.792934,
+            0.511486,
+            0.057818,
+            0.084285
+          ],
+          "index": 73,
+          "label": "book",
+          "score": 0.373655
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000632.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.321521,
+            0.142311,
+            0.357573,
+            0.31458
+          ],
+          "index": 11,
+          "label": "stop sign",
+          "score": 0.971736
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000724.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.290893,
+            0.0,
+            0.709107,
+            0.836833
+          ],
+          "index": 77,
+          "label": "teddy bear",
+          "score": 0.867916
+        },
+        {
+          "box": [
+            6.5e-05,
+            0.37324,
+            0.77038,
+            0.622398
+          ],
+          "index": 77,
+          "label": "teddy bear",
+          "score": 0.832961
+        },
+        {
+          "box": [
+            0.0,
+            0.079903,
+            0.475842,
+            0.368653
+          ],
+          "index": 77,
+          "label": "teddy bear",
+          "score": 0.679446
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000776.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.433913,
+            0.128752,
+            0.333509,
+            0.776763
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.889212
+        },
+        {
+          "box": [
+            0.347709,
+            0.849288,
+            0.490459,
+            0.088777
+          ],
+          "index": 30,
+          "label": "skis",
+          "score": 0.737068
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000785.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.572997,
+            0.288642,
+            0.396874,
+            0.555216
+          ],
+          "index": 72,
+          "label": "refrigerator",
+          "score": 0.936978
+        },
+        {
+          "box": [
+            0.168846,
+            0.450674,
+            0.211741,
+            0.382302
+          ],
+          "index": 69,
+          "label": "oven",
+          "score": 0.717427
+        },
+        {
+          "box": [
+            0.002175,
+            0.063162,
+            0.117459,
+            0.912771
+          ],
+          "index": 72,
+          "label": "refrigerator",
+          "score": 0.385092
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000802.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.237057,
+            0.202919,
+            0.41293,
+            0.75655
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.861938
+        },
+        {
+          "box": [
+            0.449232,
+            0.169628,
+            0.256751,
+            0.762154
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.748655
+        },
+        {
+          "box": [
+            0.600948,
+            0.2486,
+            0.094828,
+            0.058083
+          ],
+          "index": 32,
+          "label": "sports ball",
+          "score": 0.395545
+        },
+        {
+          "box": [
+            0.601339,
+            0.247155,
+            0.095423,
+            0.062836
+          ],
+          "index": 35,
+          "label": "baseball glove",
+          "score": 0.359474
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000872.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.431093,
+            0.19731,
+            0.220123,
+            0.737815
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.895157
+        },
+        {
+          "box": [
+            0.927773,
+            0.056899,
+            0.071571,
+            0.548621
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.872302
+        },
+        {
+          "box": [
+            0.618511,
+            0.632655,
+            0.127947,
+            0.097791
+          ],
+          "index": 38,
+          "label": "tennis racket",
+          "score": 0.83512
+        },
+        {
+          "box": [
+            0.381759,
+            0.475278,
+            0.063794,
+            0.098467
+          ],
+          "index": 32,
+          "label": "sports ball",
+          "score": 0.701029
+        },
+        {
+          "box": [
+            0.888355,
+            0.0,
+            0.104684,
+            0.035979
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.403311
+        },
+        {
+          "box": [
+            0.783498,
+            0.0,
+            0.102469,
+            0.035299
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.344454
+        },
+        {
+          "box": [
+            0.83644,
+            0.00091,
+            0.097119,
+            0.033022
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.307496
+        },
+        {
+          "box": [
+            0.675258,
+            0.0,
+            0.051813,
+            0.034397
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.301476
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000000885.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.407621,
+            0.189188,
+            0.150827,
+            0.69761
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.888911
+        },
+        {
+          "box": [
+            0.79847,
+            0.395696,
+            0.20041,
+            0.590739
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.871634
+        },
+        {
+          "box": [
+            0.187489,
+            0.307603,
+            0.119967,
+            0.498976
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.867596
+        },
+        {
+          "box": [
+            0.060575,
+            0.389951,
+            0.111987,
+            0.441351
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.833711
+        },
+        {
+          "box": [
+            0.650745,
+            0.440966,
+            0.164908,
+            0.554028
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.804219
+        },
+        {
+          "box": [
+            0.521089,
+            0.301164,
+            0.122175,
+            0.632748
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.797619
+        },
+        {
+          "box": [
+            0.319963,
+            0.356238,
+            0.124382,
+            0.504606
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.718436
+        },
+        {
+          "box": [
+            0.603075,
+            0.358957,
+            0.125578,
+            0.619279
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.584936
+        },
+        {
+          "box": [
+            0.561023,
+            0.259055,
+            0.080872,
+            0.112634
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.570613
+        },
+        {
+          "box": [
+            0.67141,
+            0.228278,
+            0.111642,
+            0.230388
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.569735
+        },
+        {
+          "box": [
+            0.462128,
+            0.325431,
+            0.033669,
+            0.128222
+          ],
+          "index": 27,
+          "label": "tie",
+          "score": 0.394982
+        },
+        {
+          "box": [
+            0.300108,
+            0.259508,
+            0.118028,
+            0.436898
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.388616
+        },
+        {
+          "box": [
+            0.029295,
+            0.550794,
+            0.082678,
+            0.17094
+          ],
+          "index": 26,
+          "label": "handbag",
+          "score": 0.370891
+        },
+        {
+          "box": [
+            0.632684,
+            0.246029,
+            0.061479,
+            0.129884
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.318799
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001000.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.774948,
+            0.223301,
+            0.222717,
+            0.776699
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.824689
+        },
+        {
+          "box": [
+            0.031246,
+            0.495038,
+            0.087606,
+            0.175595
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.758471
+        },
+        {
+          "box": [
+            0.0,
+            0.49251,
+            0.043879,
+            0.171737
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.714038
+        },
+        {
+          "box": [
+            0.62344,
+            0.479409,
+            0.101523,
+            0.211085
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.710678
+        },
+        {
+          "box": [
+            0.763644,
+            0.547787,
+            0.179795,
+            0.374486
+          ],
+          "index": 26,
+          "label": "handbag",
+          "score": 0.488972
+        },
+        {
+          "box": [
+            0.304274,
+            0.522854,
+            0.113267,
+            0.080151
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.393825
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001268.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.009266,
+            0.019899,
+            0.990734,
+            0.971122
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.92442
+        },
+        {
+          "box": [
+            0.694402,
+            0.224565,
+            0.181322,
+            0.189839
+          ],
+          "index": 67,
+          "label": "cell phone",
+          "score": 0.705798
+        },
+        {
+          "box": [
+            0.62881,
+            0.016283,
+            0.35802,
+            0.443476
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.571159
+        },
+        {
+          "box": [
+            0.0,
+            0.263549,
+            0.196674,
+            0.353143
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.415128
+        },
+        {
+          "box": [
+            0.682838,
+            0.021784,
+            0.314087,
+            0.947691
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.300637
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001296.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.168867,
+            0.360243,
+            0.544096,
+            0.391977
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.680129
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001353.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.09261,
+            0.343206,
+            0.585898,
+            0.454488
+          ],
+          "index": 55,
+          "label": "cake",
+          "score": 0.401388
+        },
+        {
+          "box": [
+            0.013677,
+            0.30685,
+            0.980361,
+            0.684349
+          ],
+          "index": 60,
+          "label": "dining table",
+          "score": 0.357445
+        },
+        {
+          "box": [
+            0.102884,
+            0.355164,
+            0.583448,
+            0.424535
+          ],
+          "index": 48,
+          "label": "sandwich",
+          "score": 0.336836
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001425.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.710651,
+            0.381421,
+            0.071947,
+            0.383073
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.809172
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001490.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.000832,
+            0.407542,
+            0.398166,
+            0.585048
+          ],
+          "index": 63,
+          "label": "laptop",
+          "score": 0.912482
+        },
+        {
+          "box": [
+            0.388381,
+            0.046894,
+            0.356678,
+            0.394471
+          ],
+          "index": 62,
+          "label": "tv",
+          "score": 0.897336
+        },
+        {
+          "box": [
+            0.386361,
+            0.746486,
+            0.108603,
+            0.084531
+          ],
+          "index": 64,
+          "label": "mouse",
+          "score": 0.874807
+        },
+        {
+          "box": [
+            0.502378,
+            0.656465,
+            0.466181,
+            0.166884
+          ],
+          "index": 66,
+          "label": "keyboard",
+          "score": 0.818829
+        },
+        {
+          "box": [
+            0.736452,
+            0.551397,
+            0.087058,
+            0.10209
+          ],
+          "index": 64,
+          "label": "mouse",
+          "score": 0.575741
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001503.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            1.6e-05,
+            0.787665,
+            0.178705,
+            0.20739
+          ],
+          "index": 2,
+          "label": "car",
+          "score": 0.88198
+        },
+        {
+          "box": [
+            0.350141,
+            0.749669,
+            0.301679,
+            0.24782
+          ],
+          "index": 2,
+          "label": "car",
+          "score": 0.864892
+        },
+        {
+          "box": [
+            0.665904,
+            0.822179,
+            0.095904,
+            0.117566
+          ],
+          "index": 2,
+          "label": "car",
+          "score": 0.644612
+        },
+        {
+          "box": [
+            0.163672,
+            0.777721,
+            0.126283,
+            0.131997
+          ],
+          "index": 7,
+          "label": "truck",
+          "score": 0.642758
+        },
+        {
+          "box": [
+            0.311881,
+            0.834833,
+            0.067824,
+            0.054297
+          ],
+          "index": 2,
+          "label": "car",
+          "score": 0.569222
+        },
+        {
+          "box": [
+            0.16378,
+            0.777153,
+            0.129161,
+            0.135994
+          ],
+          "index": 2,
+          "label": "car",
+          "score": 0.482091
+        },
+        {
+          "box": [
+            0.781545,
+            0.807549,
+            0.073249,
+            0.112416
+          ],
+          "index": 2,
+          "label": "car",
+          "score": 0.38818
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001532.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass.any: none of 2 matched",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.215076,
+            0.138025,
+            0.645486,
+            0.73809
+          ],
+          "index": 5,
+          "label": "bus",
+          "score": 0.949198
+        },
+        {
+          "box": [
+            0.830918,
+            0.514725,
+            0.099092,
+            0.114076
+          ],
+          "index": 5,
+          "label": "bus",
+          "score": 0.867309
+        },
+        {
+          "box": [
+            0.926744,
+            0.515595,
+            0.072311,
+            0.137142
+          ],
+          "index": 5,
+          "label": "bus",
+          "score": 0.863542
+        },
+        {
+          "box": [
+            0.127378,
+            0.614764,
+            0.034683,
+            0.088926
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.65712
+        },
+        {
+          "box": [
+            0.187226,
+            0.616441,
+            0.024486,
+            0.086736
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.388321
+        },
+        {
+          "box": [
+            0.566537,
+            0.2337,
+            0.057967,
+            0.074251
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.314107
+        },
+        {
+          "box": [
+            0.164877,
+            0.626533,
+            0.0338,
+            0.075301
+          ],
+          "index": 0,
+          "label": "person",
+          "score": 0.304119
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001584.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.0,
+            0.009051,
+            0.956194,
+            0.8887
+          ],
+          "index": 15,
+          "label": "cat",
+          "score": 0.513927
+        },
+        {
+          "box": [
+            0.232476,
+            0.002045,
+            0.750593,
+            0.210557
+          ],
+          "index": 62,
+          "label": "tv",
+          "score": 0.38383
+        },
+        {
+          "box": [
+            0.17389,
+            0.730998,
+            0.635743,
+            0.26717
+          ],
+          "index": 66,
+          "label": "keyboard",
+          "score": 0.339388
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001675.jpg"
+    },
+    {
+      "decision": {
+        "confidence": null,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.3
+      },
+      "detections": [
+        {
+          "box": [
+            0.351896,
+            0.018406,
+            0.172759,
+            0.118642
+          ],
+          "index": 4,
+          "label": "airplane",
+          "score": 0.891798
+        },
+        {
+          "box": [
+            0.653001,
+            0.216215,
+            0.13075,
+            0.073051
+          ],
+          "index": 4,
+          "label": "airplane",
+          "score": 0.869598
+        }
+      ],
+      "image": "dataset-coco-val2017-slice/000000001761.jpg"
+    }
+  ],
+  "model": "yolox-nano",
+  "onnxruntime": "1.29.0",
+  "provider": "CPUExecutionProvider",
+  "tolerances": {
+    "iouMin": 0.9,
+    "scoreTolerance": 0.05
+  }
+}

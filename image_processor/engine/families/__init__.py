@@ -310,6 +310,40 @@ def label_for(labels: Sequence, index: int) -> str:
     return f"class-{index}"
 
 
+def single_output(m: BundleManifest, reads: str) -> TensorSpec:
+    """Resolve the one output tensor a family reads.
+
+    A manifest declares every graph output (DESIGN.md section 8). When it declares exactly one,
+    that is the tensor. When it declares several, ``familyParams.outputName`` names the one this
+    family reads and the others are ignored; without that name the manifest is ambiguous and is
+    refused at staging.
+
+    Args:
+        m: The parsed bundle manifest.
+        reads: What the family reads, for the diagnostic (``"classification"``, ``"yoloxGrid"``).
+
+    Returns:
+        The declared :class:`~image_processor.types.TensorSpec` the family reads.
+
+    Raises:
+        FamilyError: ``UNSUPPORTED_OUTPUT_COUNT`` when no output is declared or several are
+            declared without ``familyParams.outputName``; ``MISSING_OUTPUT`` when the named
+            output is not declared.
+    """
+    if not m.outputs:
+        raise FamilyError("UNSUPPORTED_OUTPUT_COUNT", f"{reads} reads one output, manifest declares 0")
+    name = (m.family_params or {}).get("outputName")
+    if isinstance(name, str) and name:
+        return output_spec(m, name)
+    if len(m.outputs) != 1:
+        raise FamilyError(
+            "UNSUPPORTED_OUTPUT_COUNT",
+            f"{reads} reads one output, manifest declares {len(m.outputs)} and "
+            "familyParams.outputName does not say which",
+        )
+    return m.outputs[0]
+
+
 def output_spec(m: BundleManifest, name: str) -> TensorSpec:
     """Find one declared output tensor by name.
 
