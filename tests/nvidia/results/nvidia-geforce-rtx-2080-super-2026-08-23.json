@@ -1,0 +1,739 @@
+{
+  "schemaVersion": 1,
+  "gpuClass": "NVIDIA GeForce RTX 2080 SUPER",
+  "deviceTotalMiB": 8192,
+  "device": "0",
+  "onnxruntime": "1.29.0",
+  "providers": [
+    "CUDAExecutionProvider"
+  ],
+  "startedAt": "2026-08-23T21:25:00Z",
+  "corpus": {
+    "root": "/home/marc/ip-corpus",
+    "bundles": 40,
+    "routes": 40,
+    "tiersMiB": [
+      50,
+      200,
+      600,
+      1500
+    ],
+    "totalModelMiB": 23500.0,
+    "seed": 20260823
+  },
+  "budget": {
+    "residentMemoryBudgetPercent": 80,
+    "reserveMiB": 2048,
+    "budgetMiB": 6553
+  },
+  "arrivals": {
+    "perPattern": 96,
+    "ratePerSec": 8.0
+  },
+  "patterns": [
+    {
+      "pattern": "uniform",
+      "arrivals": 96,
+      "arrivalSecs": 11.9,
+      "wallSecs": 108.6,
+      "drained": true,
+      "jobs": {
+        "results": 96,
+        "succeeded": 96,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 96,
+          "p50": 48343.5,
+          "p95": 84942.75,
+          "p99": 99052.5,
+          "min": 34.0,
+          "max": 99271.0,
+          "mean": 46186.81
+        },
+        "inference": {
+          "count": 96,
+          "p50": 3.99,
+          "p95": 7.8,
+          "p99": 7.92,
+          "min": 0.94,
+          "max": 8.2,
+          "mean": 4.26
+        },
+        "cellTotal": {
+          "count": 96,
+          "p50": 48358.13,
+          "p95": 84964.15,
+          "p99": 99072.02,
+          "min": 57.61,
+          "max": 99292.75,
+          "mean": 46200.38
+        },
+        "endToEnd": {
+          "count": 96,
+          "p50": 48771.21,
+          "p95": 86370.58,
+          "p99": 99576.32,
+          "min": 922.29,
+          "max": 104277.83,
+          "mean": 47365.9
+        }
+      },
+      "loads": {
+        "cold": 40,
+        "coldMs": {
+          "count": 40,
+          "p50": 1824.33,
+          "p95": 4672.13,
+          "p99": 5283.06,
+          "min": 139.77,
+          "max": 5491.75,
+          "mean": 1896.49
+        },
+        "coldDeviceMiB": {
+          "count": 40,
+          "p50": 444.0,
+          "p95": 1551.6,
+          "p99": 1658.25,
+          "min": 72.0,
+          "max": 1707.0,
+          "mean": 641.35
+        },
+        "reload": 0,
+        "reloadMs": {
+          "count": 0
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 35,
+        "unloadMs": {
+          "count": 35,
+          "p50": 17.88,
+          "p95": 26.18,
+          "p99": 36.06,
+          "min": 11.55,
+          "max": 39.29,
+          "mean": 18.97
+        },
+        "freedMiB": {
+          "count": 35,
+          "p50": 278.0,
+          "p95": 1552.8,
+          "p99": 1593.32,
+          "min": 84.0,
+          "max": 1594.0,
+          "mean": 517.94
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 0,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 0
+        }
+      },
+      "device": {
+        "peakResidentMiB": 6416,
+        "minFreeMiB": 2666,
+        "budgetMiB": 6553,
+        "reserveMiB": 2048
+      },
+      "recycles": 1,
+      "schedulerCounters": {
+        "dispatched": 96,
+        "succeeded": 96,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 40,
+        "evictions": 35,
+        "deferred": 540,
+        "recycles": 1,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 1,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:545cab8f7b9c8eb33e765bb2d1b7d9bbffc686564db5f04325948587f0656d48",
+              "sha256:e14871860b3aab995c10c7bfb2a7a489426069e0a180e860291b318a7a5bcec9"
+            ],
+            "residentMib": {
+              "sha256:545cab8f7b9c8eb33e765bb2d1b7d9bbffc686564db5f04325948587f0656d48": 2012,
+              "sha256:e14871860b3aab995c10c7bfb2a7a489426069e0a180e860291b318a7a5bcec9": 2012
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 96,
+          "succeeded": 96,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 40,
+          "evictions": 35,
+          "deferred": 540,
+          "recycles": 1,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 96
+      }
+    },
+    {
+      "pattern": "zipf",
+      "arrivals": 96,
+      "arrivalSecs": 11.9,
+      "wallSecs": 51.4,
+      "drained": true,
+      "jobs": {
+        "results": 96,
+        "succeeded": 96,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 96,
+          "p50": 4605.0,
+          "p95": 39961.75,
+          "p99": 43843.55,
+          "min": 34.0,
+          "max": 44272.0,
+          "mean": 10634.07
+        },
+        "inference": {
+          "count": 96,
+          "p50": 1.14,
+          "p95": 7.82,
+          "p99": 8.08,
+          "min": 0.89,
+          "max": 8.13,
+          "mean": 2.39
+        },
+        "cellTotal": {
+          "count": 96,
+          "p50": 4608.03,
+          "p95": 39965.15,
+          "p99": 43846.96,
+          "min": 40.24,
+          "max": 44276.15,
+          "mean": 10641.2
+        },
+        "endToEnd": {
+          "count": 96,
+          "p50": 5527.96,
+          "p95": 40293.98,
+          "p99": 44620.28,
+          "min": 321.58,
+          "max": 46137.38,
+          "mean": 11392.28
+        }
+      },
+      "loads": {
+        "cold": 0,
+        "coldMs": {
+          "count": 0
+        },
+        "coldDeviceMiB": {
+          "count": 0
+        },
+        "reload": 21,
+        "reloadMs": {
+          "count": 21,
+          "p50": 657.65,
+          "p95": 4513.86,
+          "p99": 4542.23,
+          "min": 134.16,
+          "max": 4549.32,
+          "mean": 1680.0
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 18,
+        "unloadMs": {
+          "count": 18,
+          "p50": 17.9,
+          "p95": 32.09,
+          "p99": 39.53,
+          "min": 13.68,
+          "max": 41.39,
+          "mean": 20.82
+        },
+        "freedMiB": {
+          "count": 18,
+          "p50": 289.0,
+          "p95": 1576.0,
+          "p99": 1576.0,
+          "min": 82.0,
+          "max": 1576.0,
+          "mean": 657.44
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 0,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 0
+        }
+      },
+      "device": {
+        "peakResidentMiB": 6404,
+        "minFreeMiB": 2958,
+        "budgetMiB": 6553,
+        "reserveMiB": 2048
+      },
+      "recycles": 0,
+      "schedulerCounters": {
+        "dispatched": 96,
+        "succeeded": 96,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 21,
+        "evictions": 18,
+        "deferred": 225,
+        "recycles": 0,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 1,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:08f87097c3a1b5e77a9404e3ddb9dd5660110c56222c94e3925dd87203c42e0a",
+              "sha256:2714dfea5bf068a4dfa8a707cff65af69b9507acaa57206b3e3a6554a81f6945",
+              "sha256:30e366c7940a28f582607f29f85835273aa3a0e599b2563d8a7e737a2f5e3e91",
+              "sha256:545cab8f7b9c8eb33e765bb2d1b7d9bbffc686564db5f04325948587f0656d48",
+              "sha256:d1ad3d71a395fad7b3f31a68e9f8abd0a13a23b741086130e45e09eb18c4ef95"
+            ],
+            "residentMib": {
+              "sha256:08f87097c3a1b5e77a9404e3ddb9dd5660110c56222c94e3925dd87203c42e0a": 1112,
+              "sha256:2714dfea5bf068a4dfa8a707cff65af69b9507acaa57206b3e3a6554a81f6945": 562,
+              "sha256:d1ad3d71a395fad7b3f31a68e9f8abd0a13a23b741086130e45e09eb18c4ef95": 562,
+              "sha256:545cab8f7b9c8eb33e765bb2d1b7d9bbffc686564db5f04325948587f0656d48": 2012,
+              "sha256:30e366c7940a28f582607f29f85835273aa3a0e599b2563d8a7e737a2f5e3e91": 1756
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 192,
+          "succeeded": 192,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 61,
+          "evictions": 53,
+          "deferred": 765,
+          "recycles": 1,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 192
+      }
+    },
+    {
+      "pattern": "burst",
+      "arrivals": 80,
+      "arrivalSecs": 20.1,
+      "wallSecs": 123.8,
+      "drained": true,
+      "jobs": {
+        "results": 80,
+        "succeeded": 80,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 80,
+          "p50": 33624.0,
+          "p95": 89227.5,
+          "p99": 106524.34,
+          "min": 6.0,
+          "max": 118338.0,
+          "mean": 36163.89
+        },
+        "inference": {
+          "count": 80,
+          "p50": 4.0,
+          "p95": 7.84,
+          "p99": 7.9,
+          "min": 1.01,
+          "max": 7.99,
+          "mean": 4.33
+        },
+        "cellTotal": {
+          "count": 80,
+          "p50": 33636.09,
+          "p95": 89249.03,
+          "p99": 106544.7,
+          "min": 10.01,
+          "max": 118357.15,
+          "mean": 36176.15
+        },
+        "endToEnd": {
+          "count": 80,
+          "p50": 35129.19,
+          "p95": 94312.59,
+          "p99": 111586.49,
+          "min": 607.7,
+          "max": 123307.72,
+          "mean": 37767.11
+        }
+      },
+      "loads": {
+        "cold": 0,
+        "coldMs": {
+          "count": 0
+        },
+        "coldDeviceMiB": {
+          "count": 0
+        },
+        "reload": 44,
+        "reloadMs": {
+          "count": 44,
+          "p50": 1828.82,
+          "p95": 4494.71,
+          "p99": 4591.87,
+          "min": 132.78,
+          "max": 4646.07,
+          "mean": 1813.91
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 47,
+        "unloadMs": {
+          "count": 47,
+          "p50": 18.64,
+          "p95": 33.27,
+          "p99": 36.22,
+          "min": 11.53,
+          "max": 38.18,
+          "mean": 20.15
+        },
+        "freedMiB": {
+          "count": 47,
+          "p50": 632.0,
+          "p95": 1576.0,
+          "p99": 1586.48,
+          "min": 82.0,
+          "max": 1592.0,
+          "mean": 633.7
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 0,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 0
+        }
+      },
+      "device": {
+        "peakResidentMiB": 6428,
+        "minFreeMiB": 2760,
+        "budgetMiB": 6553,
+        "reserveMiB": 2048
+      },
+      "recycles": 0,
+      "schedulerCounters": {
+        "dispatched": 80,
+        "succeeded": 80,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 44,
+        "evictions": 47,
+        "deferred": 805,
+        "recycles": 0,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 1,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:545cab8f7b9c8eb33e765bb2d1b7d9bbffc686564db5f04325948587f0656d48",
+              "sha256:b095f6c666f188805d004e9154e17bfae2ab29203215c2600bdeba85084aa6b9"
+            ],
+            "residentMib": {
+              "sha256:545cab8f7b9c8eb33e765bb2d1b7d9bbffc686564db5f04325948587f0656d48": 2012,
+              "sha256:b095f6c666f188805d004e9154e17bfae2ab29203215c2600bdeba85084aa6b9": 2012
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 272,
+          "succeeded": 272,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 105,
+          "evictions": 100,
+          "deferred": 1570,
+          "recycles": 1,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 272
+      }
+    },
+    {
+      "pattern": "prefetch",
+      "arrivals": 96,
+      "arrivalSecs": 116.2,
+      "wallSecs": 131.9,
+      "drained": true,
+      "jobs": {
+        "results": 96,
+        "succeeded": 96,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 96,
+          "p50": 5723.5,
+          "p95": 15099.75,
+          "p99": 15918.45,
+          "min": 0.0,
+          "max": 16041.0,
+          "mean": 6646.59
+        },
+        "inference": {
+          "count": 96,
+          "p50": 4.04,
+          "p95": 7.75,
+          "p99": 7.83,
+          "min": 0.98,
+          "max": 7.85,
+          "mean": 4.23
+        },
+        "cellTotal": {
+          "count": 96,
+          "p50": 5736.25,
+          "p95": 15119.46,
+          "p99": 15938.98,
+          "min": 3.75,
+          "max": 16061.73,
+          "mean": 6658.8
+        },
+        "endToEnd": {
+          "count": 96,
+          "p50": 7586.31,
+          "p95": 16230.0,
+          "p99": 17164.62,
+          "min": 425.06,
+          "max": 17288.32,
+          "mean": 7485.77
+        }
+      },
+      "loads": {
+        "cold": 0,
+        "coldMs": {
+          "count": 0
+        },
+        "coldDeviceMiB": {
+          "count": 0
+        },
+        "reload": 32,
+        "reloadMs": {
+          "count": 32,
+          "p50": 1144.33,
+          "p95": 4046.37,
+          "p99": 4072.37,
+          "min": 117.83,
+          "max": 4078.8,
+          "mean": 1617.24
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 29,
+        "unloadMs": {
+          "count": 29,
+          "p50": 17.73,
+          "p95": 32.65,
+          "p99": 33.1,
+          "min": 12.65,
+          "max": 33.24,
+          "mean": 19.81
+        },
+        "freedMiB": {
+          "count": 29,
+          "p50": 632.0,
+          "p95": 1576.0,
+          "p99": 1580.32,
+          "min": 84.0,
+          "max": 1582.0,
+          "mean": 675.52
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 32,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 32,
+          "p50": 1247.65,
+          "p95": 4464.83,
+          "p99": 4503.7,
+          "min": 133.75,
+          "max": 4518.83,
+          "mean": 1783.75
+        }
+      },
+      "device": {
+        "peakResidentMiB": 6154,
+        "minFreeMiB": 3020,
+        "budgetMiB": 6553,
+        "reserveMiB": 2048
+      },
+      "recycles": 0,
+      "schedulerCounters": {
+        "dispatched": 96,
+        "succeeded": 96,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 32,
+        "evictions": 29,
+        "deferred": 233,
+        "recycles": 0,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 1,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:147309f18c7a5d6c17bc3187541b0b9de05de7cd35a265e65de312c96bfa1986",
+              "sha256:2714dfea5bf068a4dfa8a707cff65af69b9507acaa57206b3e3a6554a81f6945",
+              "sha256:6faf21da152d409225703f131dadbfd8d0a702a2643ef12616ddceb7501d4a49",
+              "sha256:7e0a03f3d03a7e73251235039ef6f7050326c4eed0d20cc7c2d9bf79226b0392",
+              "sha256:e14871860b3aab995c10c7bfb2a7a489426069e0a180e860291b318a7a5bcec9"
+            ],
+            "residentMib": {
+              "sha256:7e0a03f3d03a7e73251235039ef6f7050326c4eed0d20cc7c2d9bf79226b0392": 1756,
+              "sha256:e14871860b3aab995c10c7bfb2a7a489426069e0a180e860291b318a7a5bcec9": 2012,
+              "sha256:6faf21da152d409225703f131dadbfd8d0a702a2643ef12616ddceb7501d4a49": 712,
+              "sha256:2714dfea5bf068a4dfa8a707cff65af69b9507acaa57206b3e3a6554a81f6945": 562,
+              "sha256:147309f18c7a5d6c17bc3187541b0b9de05de7cd35a265e65de312c96bfa1986": 1112
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 368,
+          "succeeded": 368,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 137,
+          "evictions": 129,
+          "deferred": 1803,
+          "recycles": 1,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 368
+      }
+    }
+  ]
+}

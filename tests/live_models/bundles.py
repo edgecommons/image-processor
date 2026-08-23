@@ -231,6 +231,44 @@ def _yolox(model_id: str, size: int, anchors: int) -> Dict[str, Any]:
     return document
 
 
+def classifier_document(
+    model_id: str, input_name: str, output_name: str, batch_axis: str, imagenet_labels: List[str]
+) -> Dict[str, Any]:
+    """Build the manifest of an ImageNet classifier, for callers outside this module.
+
+    The tier-3 corpus generator (``tools/synth_corpus.py``) grows its MobileNetV2 bundles from this
+    manifest, so a synthesized bundle carries the same preprocessing, head, and decision rules as
+    the real model it derives from.
+
+    Args:
+        model_id: The bundle's model id.
+        input_name: The graph's input tensor name.
+        output_name: The graph's output tensor name.
+        batch_axis: The name the graph gives its dynamic batch dimension.
+        imagenet_labels: The thousand ImageNet-1k class names.
+
+    Returns:
+        The manifest document.
+    """
+    return _classifier(model_id, input_name, output_name, batch_axis, imagenet_labels)
+
+
+def yolox_document(model_id: str, size: int, anchors: int) -> Dict[str, Any]:
+    """Build the manifest of a YOLOX export, for callers outside this module.
+
+    The tier-3 corpus generator grows its YOLOX-S bundles from this manifest.
+
+    Args:
+        model_id: The bundle's model id.
+        size: The square model input size in pixels.
+        anchors: How many grid cells the three strides describe at that size.
+
+    Returns:
+        The manifest document.
+    """
+    return _yolox(model_id, size, anchors)
+
+
 def _ssd() -> Dict[str, Any]:
     """Build the manifest of the SSD-MobileNetV1 export.
 

@@ -13,31 +13,77 @@ fractions rather than masks, and the decision the rules reached.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import onnxruntime as ort
 
+from image_processor.engine.cell_main import onnxruntime_module, provider_options
 from image_processor.engine.decision import decide
 from image_processor.engine.decode import DecodeLimits, decode_image
 from image_processor.engine.families import family_for
+from image_processor.engine.protocol import CPU_PROVIDER, CUDA_PROVIDER
 from image_processor.types import BundleManifest, CachedBundle
 from tools.update_goldens import round_number
 
-#: Execution provider the tier-2 suite runs on. CUDA parity is the lab leg (D-IP-14).
-PROVIDERS = ["CPUExecutionProvider"]
+#: The provider the committed goldens were produced on. Every other provider is asserted against
+#: them, which is what makes CPU-to-CUDA parity a comparison rather than two separate baselines.
+PROVIDERS = [CPU_PROVIDER]
+
+#: The arena bound a CUDA session in this suite is given, in MiB. The tier-2 graphs are small; the
+#: bound is here so a lab run cannot take the whole card away from anything else on it.
+CUDA_ARENA_MIB = 4096
 
 
-def open_session(bundle: CachedBundle) -> ort.InferenceSession:
-    """Open a session on a staged bundle's graph.
+def open_session(
+    bundle: CachedBundle, provider: str = CPU_PROVIDER, device_id: int = 0
+) -> ort.InferenceSession:
+    """Open a session on a staged bundle's graph, on one execution provider.
+
+    The runtime is imported through the executor cell's own accessor, which preloads the NVIDIA
+    libraries the CUDA provider links against; without that the provider library fails to load and
+    the session lands on CPU. The provider options are the cell's own as well
+    (``engine.cell_main.provider_options``), so a CUDA session here is configured the way a CUDA
+    session in a cell is: the device ordinal, the arena bound, and ``kSameAsRequested`` so the arena
+    does not double itself (DESIGN.md 10.2).
+
+    The assignment is then checked, because ONNX Runtime does not raise when it cannot build a
+    provider: it drops it and runs on CPU. A parity leg that accepted that would compare CPU
+    against CPU and report agreement.
 
     Args:
         bundle: The staged bundle.
+        provider: The execution provider to request.
+        device_id: The CUDA device ordinal, when the provider is CUDA.
 
     Returns:
-        The session, pinned to :data:`PROVIDERS`.
+        The session, assigned the provider that was asked for.
+
+    Raises:
+        RuntimeError: The session was not assigned the requested provider.
     """
-    return ort.InferenceSession(str(bundle.model_path), providers=PROVIDERS)
+    runtime = onnxruntime_module()
+    requested = [provider]
+    options = provider_options(
+        requested, device_id, CUDA_ARENA_MIB if provider == CUDA_PROVIDER else None
+    )
+    session_options = runtime.SessionOptions()
+    session_options.log_severity_level = 3
+    session = runtime.InferenceSession(
+        str(bundle.model_path),
+        sess_options=session_options,
+        providers=requested,
+        provider_options=[dict(entry) for entry in options],
+    )
+    assigned = list(session.get_providers())
+    if provider not in assigned:
+        raise RuntimeError(
+            f"{bundle.manifest.model_id} was asked for {provider} and the session was assigned "
+            f"{assigned}. ONNX Runtime falls back silently, so a run that accepted this would "
+            "compare CPU against CPU and call it parity."
+        )
+    return session
 
 
 def infer(session: ort.InferenceSession, manifest: BundleManifest, data: bytes) -> tuple:
@@ -49,15 +95,18 @@ def infer(session: ort.InferenceSession, manifest: BundleManifest, data: bytes) 
         data: The encoded image bytes.
 
     Returns:
-        A ``(normalized, decision)`` pair.
+        A ``(normalized, decision, session_ms)`` triple. The milliseconds cover the graph alone,
+        not decode or the transforms, so a CPU reading and a CUDA reading compare like for like.
     """
     family = family_for(manifest)
     image = decode_image(data, DecodeLimits())
     feed = family.preprocess(image, manifest)
     names = [tensor.name for tensor in session.get_outputs()]
+    started = time.perf_counter()
     outputs = dict(zip(names, session.run(names, feed)))
+    session_ms = (time.perf_counter() - started) * 1000.0
     normalized = family.postprocess(outputs, manifest, (image.shape[0], image.shape[1]))
-    return normalized, decide(normalized, manifest.decision_rules)
+    return normalized, decide(normalized, manifest.decision_rules), session_ms
 
 
 def _decision_record(decision) -> Dict[str, Any]:
