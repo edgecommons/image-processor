@@ -148,8 +148,14 @@ class FakeCell:
         free_mib: int = 8192,
         load_mib: int = 1024,
         load_ms: float = 120.0,
+        context_mib: int = 0,
     ) -> None:
-        """Build a fake cell with an imagined device."""
+        """Build a fake cell with an imagined device.
+
+        ``context_mib`` models what a real CUDA cell does: the first load establishes the device
+        context, which costs memory once, is reported apart from the model, and does not come back
+        from an unload because it is not a session.
+        """
         self.cell_id = cell_id
         self.device = device
         self.providers = tuple(providers)
@@ -157,6 +163,8 @@ class FakeCell:
         self.free_mib = free_mib
         self.load_mib = load_mib
         self.load_ms = load_ms
+        self.context_mib = context_mib
+        self.context_established = False
         self.calls = []
         self.resident = {}
         self.started = 0
@@ -177,6 +185,7 @@ class FakeCell:
         self.started += 1
         self.alive = True
         self.broken = None
+        self.context_established = False
         self.resident = {}
         self._replies.clear()
         self._in_flight = None
@@ -227,6 +236,11 @@ class FakeCell:
         if isinstance(message, LoadModel):
             reply = self.on_load(message) if self.on_load else None
             if reply is None:
+                established = 0
+                if self.context_mib and not self.context_established:
+                    established = self.context_mib
+                    self.context_established = True
+                    self.free_mib = max(self.free_mib - established, 0)
                 self.resident[message.digest] = self.load_mib
                 self.free_mib = max(self.free_mib - self.load_mib, 0)
                 reply = Loaded(
@@ -236,6 +250,7 @@ class FakeCell:
                     device_mib=self.load_mib,
                     gpu_device=self.device,
                     gpu_class="NVIDIA Test GPU",
+                    context_mib=established,
                 )
             return reply
         if isinstance(message, Infer):
@@ -265,6 +280,7 @@ class FakeCell:
                 gpu_device=self.device,
                 gpu_class="NVIDIA Test GPU",
                 resident_mib=dict(self.resident),
+                context_mib=self.context_mib if self.context_established else 0,
             )
         raise CellError(f"the fake cell has no answer for {type(message).__name__}")
 

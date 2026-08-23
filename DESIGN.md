@@ -242,7 +242,14 @@ stateDiagram-v2
     CLEANUP_PENDING --> CLEANUP_FAILED: action fails
     CLEANUP_FAILED --> CLEANUP_PENDING: retry or operator command
     RETRY_WAIT --> READY
+    BLOCKED_CONFIGURATION --> READY: configuration changed
 ```
+
+`BLOCKED_CONFIGURATION` is recoverable by configuration rather than terminal: a job reaches it
+because the generation it is pinned to could not load on this device, and it returns to `READY`
+when that stops being true, which is a route activating a generation that loaded or an operator
+running `reload-model-catalog`. A restart does not, because the process comes back on the same
+configuration; the recovery-edge table, not the diagram above, is what carries the move.
 
 SQLite runs in WAL mode behind a single-writer coordinator; the regulated profile uses
 `synchronous=FULL`. A job is accepted only after its admission transaction commits; admission
@@ -382,6 +389,12 @@ GPU admission uses the manifest estimate, previously measured load peak and stea
 co-located process allowance. ONNX Runtime's `gpu_mem_limit` bounds only the provider arena. Load
 concurrency defaults to one per GPU; leases pin sessions used by queued or in-flight work.
 
+The device context belongs to the cell, not to a model. A cell establishes it before its first
+session, by building and dropping a one-node graph, and measures it there; every model footprint
+the cell reports is then measured from that baseline and carries the model alone. The budget
+subtracts the context of each cell on the device once, rather than carrying it again with every
+model admitted against it.
+
 ### 10.3 Scheduling
 
 Per-model-generation lanes: resident-model work is preferred; a newly loaded model drains a bounded
@@ -395,8 +408,10 @@ byte first. Thrash is measured and reported; accepted jobs are never dropped.
 ### 10.4 Unload and recycle
 
 Normal unload stops new leases, drains, releases the session and buffers, synchronizes, and samples
-memory after a settle period. If memory is not reclaimed, fragmentation crosses the threshold, or
-the runtime reports a sticky failure, the supervisor drains and restarts the cell.
+memory after a settle period. What comes back is compared against the model's context-free
+footprint, because the device context is not a session and no unload takes one down. If memory is
+not reclaimed, fragmentation crosses the threshold, or the runtime reports a sticky failure, the
+supervisor drains and restarts the cell.
 
 ## 11. Configuration shape
 
@@ -522,13 +537,18 @@ is the contract):
   "inferenceId": "01K...",
   "status": "SUCCEEDED",
   "source": { "kind": "spool", "captureId": "01K...", "cameraId": "cam-01", "relativePath": "2026/08/22/....jpg", "bytes": 4182032, "sha256": "..." },
-  "model": { "id": "line-clearance-cam-01", "version": "2026.08.20", "digest": "sha256:...", "runtime": "onnxruntime", "providers": ["CUDAExecutionProvider"], "gpu": { "deviceId": "0", "class": "..." } },
+  "model": { "id": "line-clearance-cam-01", "version": "2026.08.20", "digest": "sha256:...", "runtime": "onnxruntime", "providers": ["CUDAExecutionProvider", "CPUExecutionProvider"], "gpu": { "deviceId": "0", "class": "..." } },
   "decision": { "outcome": "CLEAR", "pass": true, "confidence": 0.997, "threshold": 0.98 },
   "outputs": { "classes": [], "detections": [] },
   "timingsMs": { "queue": 12.4, "modelLoad": 0, "preprocess": 3.1, "inference": 5.8, "postprocess": 0.9, "total": 22.2 },
   "artifacts": { "evidenceId": "01K...", "localRelativePath": "cam-01/....inference.json", "sha256": "..." }
 }
 ```
+
+`model.providers` is the session's whole actual provider assignment, in the order the runtime
+reports it, not the configured preference and not the one provider the work ran on. A session
+built with a CUDA preference and a CPU fallback reports both, which is what lets a consumer tell a
+session that could still fall back from one that could not.
 
 Every region — a detection `box`, a segment `bbox`, an anomaly summary `bbox` — is `[x, y, w, h]`
 normalized to the source image, so a consumer draws it without knowing the model's input size.
@@ -579,7 +599,7 @@ Component verbs (`CommandInbox.register_outcome`, instance scope unless noted):
 | `trigger-rescan` | both | Immediate authoritative rescan. |
 | `preload-model` | component | Stage and warm a model digest; deferred reply with the outcome. |
 | `evict-model` | component | Evict an idle session; refuses a leased model. |
-| `reload-model-catalog` | component | Re-evaluate `models[]` against the cache. |
+| `reload-model-catalog` | component | Re-evaluate `models[]` against the cache, and return the `BLOCKED_CONFIGURATION` jobs of every route whose entry re-verified to `READY`; the reply carries the count. |
 | `set-route-activation-override` | instance | Persisted operational override reported beside configured state; does not mutate configuration. |
 | `retry-publication`, `retry-cleanup`, `reconcile` | both | Operator repair actions; deferred replies. |
 | `pause`, `resume` | both | Stop/resume claiming new work; in-flight jobs finish. |

@@ -7,6 +7,7 @@ from ledger_support import MODEL, build_job
 
 from image_processor.ledger import SCHEMA_VERSION, TRANSITIONS, Ledger, is_legal
 from image_processor.ledger import schema as ledger_schema
+from image_processor.ledger.recovery import RECOVERY_EDGES
 from image_processor.types import CompletionAction, JobState, SourceKind
 
 #: Every edge of the DESIGN.md §7 state diagram, transcribed independently of the module.
@@ -35,8 +36,34 @@ EXPECTED_EDGES = {
 }
 
 
+#: The edges recovery may take. They are not part of the diagram: each one moves a job backwards.
+EXPECTED_RECOVERY_EDGES = {
+    ("INFERENCING", "READY"),
+    ("CLAIMED", "READY"),
+    ("WAITING_MODEL", "READY"),
+    ("RETRY_WAIT", "READY"),
+    ("RESULT_COMMITTED", "READY"),
+    ("PUBLISH_PENDING", "READY"),
+    ("BLOCKED_CONFIGURATION", "READY"),
+}
+
+
 def test_transition_table_is_the_design_diagram():
     assert {(a.value, b.value) for a, b in TRANSITIONS} == EXPECTED_EDGES
+
+
+def test_the_recovery_table_is_separate_from_the_diagram():
+    assert {(a.value, b.value) for a, b in RECOVERY_EDGES} == EXPECTED_RECOVERY_EDGES
+    # RETRY_WAIT -> READY is the one edge both tables declare, because the forward lifecycle takes
+    # it too. Every other recovery edge moves a job backwards and belongs to recovery alone.
+    assert RECOVERY_EDGES & TRANSITIONS == frozenset(
+        {(JobState.RETRY_WAIT, JobState.READY)}
+    )
+
+
+def test_blocked_configuration_leaves_only_by_the_recovery_edge():
+    assert (JobState.BLOCKED_CONFIGURATION, JobState.READY) in RECOVERY_EDGES
+    assert not any(a is JobState.BLOCKED_CONFIGURATION for a, _ in TRANSITIONS)
 
 
 def test_is_legal_agrees_with_the_table():

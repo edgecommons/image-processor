@@ -34,6 +34,7 @@ from typing import Callable, Iterable, Optional
 
 from image_processor.ledger import schema as _schema
 from image_processor.ledger.recovery import (
+    INVALIDATABLE_STATES,
     RECOVERY_EDGES,
     RecoveryReport,
     SidecarRecord,
@@ -1016,7 +1017,7 @@ class Ledger:
             if row is None:
                 raise LedgerConflict(f"no such job: {inference_id}")
             current = JobState(row[0])
-            if (current, JobState.READY) not in RECOVERY_EDGES:
+            if current not in INVALIDATABLE_STATES:
                 raise IllegalTransition(f"{current.value} holds no committed result to invalidate")
             conn.execute("DELETE FROM outbox WHERE inference_id = ?", (inference_id,))
             conn.execute(
@@ -1027,6 +1028,53 @@ class Ledger:
             return self._force_state(conn, inference_id, current, JobState.READY, last_error=reason)
 
         return self._write(_txn)
+
+    def requeue_blocked(self, route_id: Optional[str] = None) -> int:
+        """Return configuration-blocked jobs to ``READY`` (DESIGN.md §7).
+
+        ``BLOCKED_CONFIGURATION`` is recoverable by configuration, not terminal. A job reaches it
+        because the model generation it is pinned to could not load on this machine, and it stays
+        there for as long as that is still true. Two events say it is no longer true: a route
+        activating a generation that loaded, and an operator reloading the model catalog after
+        re-staging a bundle or fixing the device. Both call this; a restart does not, because the
+        configuration a restart comes back on is the one that blocked the jobs in the first place.
+
+        The move takes the recovery edge table rather than the forward lifecycle one, because the
+        DESIGN.md §7 diagram declares no forward edge out of ``BLOCKED_CONFIGURATION``: a job going
+        back to ``READY`` is moving backwards, the way restart recovery moves one.
+
+        The block reason is kept as the job's last error, so ``get-queue`` still shows why the job
+        stalled until something else overwrites it.
+
+        Args:
+            route_id: Requeue only this route's jobs, or ``None`` for every route.
+
+        Returns:
+            How many jobs moved.
+        """
+
+        def _txn(conn) -> int:
+            sql = "SELECT inference_id FROM jobs WHERE state = ?"
+            params: list = [JobState.BLOCKED_CONFIGURATION.value]
+            if route_id is not None:
+                sql += " AND route_id = ?"
+                params.append(route_id)
+            sql += " ORDER BY created_at_ms, inference_id"
+            rows = conn.execute(sql, tuple(params)).fetchall()
+            for row in rows:
+                self._force_state(
+                    conn, row[0], JobState.BLOCKED_CONFIGURATION, JobState.READY
+                )
+            return len(rows)
+
+        moved = self._write(_txn)
+        if moved:
+            log.info(
+                "returned %d configuration-blocked job(s) to READY for %s",
+                moved,
+                route_id or "every route",
+            )
+        return moved
 
     def _force_state(self, conn, inference_id: str, current: JobState, new: JobState, **fields) -> Job:
         """Take a recovery edge, which the forward lifecycle table does not contain.
@@ -1071,6 +1119,12 @@ class Ledger:
         ``RETRY_WAIT`` job whose backoff has elapsed becomes claimable again; committed results and
         their outbox rows are left alone for the publisher; and open cleanup intents are returned
         so the caller can reconcile them against observed filesystem state.
+
+        ``BLOCKED_CONFIGURATION`` is left alone too, and deliberately. Those jobs are pinned to a
+        model generation that could not load, and the process comes back on the configuration that
+        blocked them, so a restart on its own proves nothing has changed. They drain through
+        :meth:`requeue_blocked`, which a successful activation and the ``reload-model-catalog``
+        command call.
 
         Returns:
             The :class:`~image_processor.ledger.recovery.RecoveryReport` for this pass.

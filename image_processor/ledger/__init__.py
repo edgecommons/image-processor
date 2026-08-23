@@ -15,6 +15,7 @@ from image_processor.ledger.ledger import (
     OutboxRow,
 )
 from image_processor.ledger.recovery import (
+    INVALIDATABLE_STATES,
     RECOVERY_EDGES,
     RecoveryMove,
     RecoveryReport,
@@ -38,6 +39,7 @@ __all__ = [
     "LedgerConflict",
     "LedgerError",
     "OutboxRow",
+    "INVALIDATABLE_STATES",
     "RECOVERY_EDGES",
     "RecoveryMove",
     "RecoveryReport",

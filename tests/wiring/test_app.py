@@ -356,3 +356,83 @@ def test_a_paused_route_is_not_reported_as_degraded(running, gg):
     status = {item.route_id: item for item in running.route_statuses()}["clearance-cam-01"]
     assert status.paused is True
     assert status.connected is False
+
+
+# -- BLOCKED_CONFIGURATION drains when the configuration changes (DESIGN.md 7) -------------------
+
+
+def _strand(app, home, corpus) -> str:
+    """Admit one job and leave it at ``BLOCKED_CONFIGURATION``, the way a permanent load does.
+
+    Args:
+        app: The running component.
+        home: The directory tree the component owns.
+        corpus: The image corpus.
+
+    Returns:
+        The inference id of the stranded job.
+    """
+    write_capture(home / "spool", "cap.png", corpus.image("anomaly-good.png"))
+    assert app._source_of("clearance-cam-01").rescan() == 1
+    jobs, _cursor = app._ledger.by_state([JobState.READY], "clearance-cam-01", None, 5)
+    assert len(jobs) == 1
+    job_id = jobs[0].inference_id
+    app._ledger.transition(job_id, JobState.READY, JobState.CLAIMED)
+    app._ledger.transition(job_id, JobState.CLAIMED, JobState.WAITING_MODEL)
+    app._ledger.transition(
+        job_id,
+        JobState.WAITING_MODEL,
+        JobState.BLOCKED_CONFIGURATION,
+        last_error="PROVIDER_CPU_ONLY: the session did not land on the required provider",
+    )
+    # The lane still holds a stale copy; one pass loses the claim to the ledger and drops it, which
+    # is the state a real _block_lane leaves behind.
+    app._scheduler.run_once()
+    assert app._scheduler.queued() == 0
+    assert app._ledger.get(job_id).state is JobState.BLOCKED_CONFIGURATION
+    return job_id
+
+
+def test_a_successful_activation_re_runs_the_jobs_the_old_configuration_blocked(
+    running, home, corpus
+):
+    job_id = _strand(running, home, corpus)
+    digest = running._config.route("clearance-cam-01").model_ref.digest
+    # the route is back to having no active generation, as it would be if its model never loaded
+    running._ledger.set_route_generation("clearance-cam-01", digest, None)
+
+    assert running._artifacts.reconcile() == 1
+
+    assert running._ledger.get(job_id).state is JobState.READY
+    assert running._scheduler.queued() == 1, "the scheduler was handed the job again"
+
+    _drain(running)
+
+    # the publisher is not running in this fixture, so a job the scheduler ran and the app
+    # committed ends with its result durable and its outbox eligible
+    assert running._ledger.get(job_id).state is JobState.PUBLISH_PENDING
+    assert running._ledger.result_bytes(job_id)
+
+
+def test_a_restart_on_its_own_does_not_unblock_a_stranded_job(running, home, corpus):
+    job_id = _strand(running, home, corpus)
+
+    running._recover()
+    running._resubmit()
+
+    assert running._ledger.get(job_id).state is JobState.BLOCKED_CONFIGURATION
+    assert running._scheduler.queued() == 0
+
+
+def test_reloading_the_catalog_reports_the_jobs_it_returned_to_ready(running, home, corpus):
+    job_id = _strand(running, home, corpus)
+
+    outcome = running.reload_model_catalog()
+
+    assert outcome["requeued"] == 1
+    assert running._ledger.get(job_id).state is JobState.READY
+    assert running._scheduler.queued() == 1
+
+
+def test_reloading_the_catalog_returns_nothing_when_nothing_is_blocked(running):
+    assert running.reload_model_catalog()["requeued"] == 0

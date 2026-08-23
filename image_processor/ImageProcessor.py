@@ -198,6 +198,7 @@ class ImageProcessor(ConfigurationChangeListener):
             events=self._events,
             metrics=self._metrics,
             on_activated=self._on_model_activated,
+            on_requeued=self._on_jobs_requeued,
         )
         self._health = Health(
             statuses=self.route_statuses,
@@ -511,13 +512,23 @@ class ImageProcessor(ConfigurationChangeListener):
                 self._ledger.last_error(intent.inference_id) or "",
             )
 
-    def _resubmit(self) -> None:
-        """Hand every claimable job back to the scheduler after a restart."""
+    def _resubmit(self, route_id: Optional[str] = None) -> None:
+        """Hand every claimable job back to the scheduler.
+
+        Startup calls it after recovery, and it is also how a job returned to ``READY`` while the
+        component is running rejoins a lane: a lane keeps no record of a job the ledger moved
+        underneath it, so the job has to be submitted again (DESIGN.md 7). Submitting one the
+        scheduler already holds is harmless, because the duplicate loses the ledger's expected-state
+        gate on its first claim and is dropped there.
+
+        Args:
+            route_id: Resubmit only this route's jobs, or ``None`` for every route.
+        """
         submitted = 0
         for state in (JobState.READY,):
             cursor = None
             for _page in range(PRIME_PAGES):
-                jobs, cursor = self._ledger.by_state([state], None, cursor, PRIME_PAGE_SIZE)
+                jobs, cursor = self._ledger.by_state([state], route_id, cursor, PRIME_PAGE_SIZE)
                 for job in jobs:
                     route = self._config.route(job.route_id)
                     if route is None:
@@ -1296,6 +1307,33 @@ class ImageProcessor(ConfigurationChangeListener):
                 "route %s will reprocess %d input(s) under %s", route_id, forgotten, digest
             )
 
+    def _on_jobs_requeued(self, route_id: str, count: int) -> None:
+        """Put jobs an activation unblocked back in front of the scheduler (DESIGN.md 7).
+
+        The ledger moves them to ``READY`` on its own, and a lane holds no record of a job it has
+        already given a terminal verdict to, so nothing picks them up without this.
+
+        Args:
+            route_id: The route whose jobs were requeued.
+            count: How many moved.
+        """
+        logger.info("route %s has %d job(s) to re-run after its model activated", route_id, count)
+        self._resubmit(route_id)
+
+    def _requeue_blocked(self, route_id: str) -> int:
+        """Return one route's configuration-blocked jobs to the scheduler.
+
+        Args:
+            route_id: The route.
+
+        Returns:
+            How many jobs moved.
+        """
+        moved = int(self._ledger.requeue_blocked(route_id))
+        if moved:
+            self._on_jobs_requeued(route_id, moved)
+        return moved
+
     # -- status ------------------------------------------------------------------------
 
     def route_statuses(self) -> list:
@@ -1320,10 +1358,30 @@ class ImageProcessor(ConfigurationChangeListener):
                     executor_healthy=self._supervisor.healthy(),
                     queued=queued,
                     oldest_age_secs=(now_ms - oldest) / 1000.0 if oldest else 0.0,
-                    last_error=runtime.last_error if runtime is not None else None,
+                    last_error=self._route_condition(route.id, runtime),
                 )
             )
         return statuses
+
+    def _route_condition(self, route_id: str, runtime: Optional[RouteRuntime]) -> Optional[str]:
+        """Return the condition line one route reports, most specific first.
+
+        A model that failed staging, warmup, or activation is why the route is degraded, so it
+        wins over the running note: without it ``route-degraded`` carries an empty reason while
+        the actual cause sits in the artifact manager (DESIGN.md 12.3). A successful activation
+        clears it, and the note takes over again as soon as the route has a model.
+
+        Args:
+            route_id: The route.
+            runtime: Its live runtime, or ``None`` when it has none.
+
+        Returns:
+            The bounded detail, or ``None`` when the route reports no condition.
+        """
+        failure = self._artifacts.route_error(route_id)
+        if failure:
+            return failure
+        return runtime.last_error if runtime is not None else None
 
     def _source_reachable(self, route: Any, runtime: Optional[RouteRuntime]) -> bool:
         """Whether a route can actually see its input right now."""
@@ -1572,13 +1630,30 @@ class ImageProcessor(ConfigurationChangeListener):
         return self._scheduler.evict(digest)
 
     def reload_model_catalog(self) -> dict:
-        """Re-evaluate the configured models against the cache, retrying failed generations."""
+        """Re-evaluate the configured models against the cache, retrying failed generations.
+
+        A route whose catalog entry re-verifies is a route whose configuration no longer blocks
+        work, so its ``BLOCKED_CONFIGURATION`` jobs go back to ``READY`` and the reply says how
+        many did (DESIGN.md 7). ``requeued`` covers both the routes that switched generation
+        during the pass, which the artifact manager unblocks as part of the switch, and the routes
+        already on a generation that still verifies.
+
+        Returns:
+            The routes that switched, the jobs returned to ``READY``, the bundles collected, and
+            the model catalog as it now stands.
+        """
         for entry in self._config.models:
             self._scheduler.reset_lane(entry.digest)
+        activated = self._artifacts.counters["requeued"]
         switched = self._artifacts.reconcile(force=True)
+        requeued = self._artifacts.counters["requeued"] - activated
+        for route in self._config.routes:
+            if self._artifacts.verified(route.id):
+                requeued += self._requeue_blocked(route.id)
         collected = self._artifacts.collect()
         return {
             "routesSwitched": switched,
+            "requeued": requeued,
             "collected": list(collected),
             "models": self._artifacts.status(),
         }

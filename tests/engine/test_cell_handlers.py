@@ -724,3 +724,176 @@ def test_priming_a_session_that_refuses_zeros_is_not_a_load_failure(cell, corpus
 
     loaded.manifest = replace(loaded.manifest, inputs=[])
     prime_session(loaded)
+
+
+# -- the device context is the cell's, not the first model's (DESIGN.md 10.2, 10.4) -------------
+
+
+class _Measuring(CellState):
+    """A cell whose imagined device is the probe the test moves by hand."""
+
+    def snapshot(self):
+        """Read the test's probe rather than the cell's device."""
+        return self.probe.snapshot(0)
+
+
+def _cuda_cell(probe) -> CellState:
+    """A device cell whose sessions and context cost the probe memory.
+
+    Args:
+        probe: The :class:`StaticMemoryProbe` standing in for the device.
+
+    Returns:
+        The cell state. Building the context costs 256 MiB and every session costs 512 MiB.
+    """
+    state = _Measuring(
+        CellConfig(cell_id="gpu0-0", device_id=0, providers=(CUDA_PROVIDER, CPU_PROVIDER)),
+        probe=probe,
+    )
+    factory = state.session_factory
+
+    def taking(model_path, providers, options):
+        # the request names CUDA, which is what makes the cell establish a context; the session
+        # itself is built on CPU, because a tier-1 host has no device to build it on
+        probe.allocate(512)
+        return factory(model_path, (CPU_PROVIDER,), [{}])
+
+    def context(providers, options):
+        probe.allocate(256)
+        return object()
+
+    state.session_factory = taking
+    state.context_factory = context
+    return state
+
+
+def _cuda_load(state, corpus, bundle_key: str) -> Loaded:
+    """Load one corpus bundle on a device cell, asking for CUDA first."""
+    return load(
+        state,
+        corpus,
+        bundle_key,
+        providers=(CUDA_PROVIDER, CPU_PROVIDER),
+        allow_cpu_only=True,
+    )
+
+
+def test_the_first_load_charges_the_model_and_reports_the_context_apart(corpus):
+    probe = StaticMemoryProbe(total_mib=8192, free_mib=8192, device_class="NVIDIA Test GPU")
+    state = _cuda_cell(probe)
+
+    reply = _cuda_load(state, corpus, "synthetic-classification-1.0.0")
+
+    assert isinstance(reply, Loaded)
+    assert reply.context_mib == 256, "the context is measured on its own"
+    assert reply.device_mib == 512, "and is not charged to the model that happened to load first"
+    assert state.context_mib == 256
+
+
+def test_only_the_load_that_established_the_context_reports_one(corpus):
+    probe = StaticMemoryProbe(total_mib=8192, free_mib=8192, device_class="NVIDIA Test GPU")
+    state = _cuda_cell(probe)
+    _cuda_load(state, corpus, "synthetic-classification-1.0.0")
+
+    second = _cuda_load(state, corpus, "synthetic-detection-grid-1.0.0")
+
+    assert second.context_mib == 0
+    assert second.device_mib == 512
+
+
+def test_an_unload_is_judged_against_the_model_alone(corpus):
+    probe = StaticMemoryProbe(total_mib=8192, free_mib=8192, device_class="NVIDIA Test GPU")
+    state = _cuda_cell(probe)
+    _cuda_load(state, corpus, "synthetic-classification-1.0.0")
+
+    # releasing the session gives back the model; the context stays, because a context is not a
+    # session and nothing about an unload takes one down
+    release = state.release
+
+    def giving_back(digest):
+        probe.release(512)
+        return release(digest)
+
+    state.release = giving_back
+    freed = handle_unload(state, Unload(digest_of("synthetic-classification-1.0.0")))
+
+    assert freed.expected_mib == 512
+    assert freed.freed_mib == 512, "the whole of what the model was charged came back"
+
+
+def test_the_stats_reply_carries_the_context_the_cell_holds(corpus):
+    probe = StaticMemoryProbe(total_mib=8192, free_mib=8192, device_class="NVIDIA Test GPU")
+    state = _cuda_cell(probe)
+
+    assert handle_stats(state, Stats()).context_mib == 0
+    _cuda_load(state, corpus, "synthetic-classification-1.0.0")
+    assert handle_stats(state, Stats()).context_mib == 256
+
+
+def test_a_cpu_cell_never_builds_a_context(cell, corpus):
+    built: list = []
+    cell.context_factory = lambda providers, options: built.append(providers)
+
+    reply = load(cell, corpus, "synthetic-classification-1.0.0")
+
+    assert built == []
+    assert reply.context_mib == 0
+    assert cell.context_mib == 0
+
+
+def test_a_device_cell_asked_for_cpu_only_never_builds_a_context(corpus):
+    probe = StaticMemoryProbe(total_mib=8192, free_mib=8192, device_class="NVIDIA Test GPU")
+    state = _cuda_cell(probe)
+
+    reply = load(state, corpus, "synthetic-classification-1.0.0", providers=(CPU_PROVIDER,))
+
+    assert reply.context_mib == 0
+    assert reply.device_mib == 512, "the whole delta is the model, because no context was built"
+
+
+def test_a_context_that_cannot_be_built_leaves_the_load_alone(corpus):
+    probe = StaticMemoryProbe(total_mib=8192, free_mib=8192, device_class="NVIDIA Test GPU")
+    state = _cuda_cell(probe)
+
+    def refuse(providers, options):
+        raise RuntimeError("the runtime will not build one")
+
+    state.context_factory = refuse
+
+    reply = _cuda_load(state, corpus, "synthetic-classification-1.0.0")
+
+    assert isinstance(reply, Loaded)
+    assert reply.context_mib == 0, "the cell says it could not measure one"
+    assert reply.device_mib == 512
+    assert state.context_established is True, "and does not pay for the attempt on every load"
+
+
+def test_a_device_with_no_accounting_measures_no_context(corpus):
+    blind = StaticMemoryProbe(total_mib=0, free_mib=0)
+    state = _Measuring(
+        CellConfig(cell_id="gpu0-0", device_id=0, providers=(CUDA_PROVIDER, CPU_PROVIDER)),
+        probe=blind,
+    )
+    built: list = []
+    state.context_factory = lambda providers, options: built.append(providers)
+    factory = state.session_factory
+    state.session_factory = lambda path, providers, options: factory(path, (CPU_PROVIDER,), [{}])
+
+    reply = _cuda_load(state, corpus, "synthetic-classification-1.0.0")
+
+    assert built == [], "there is nothing to measure, so there is nothing to measure it with"
+    assert reply.context_mib == 0
+
+
+def test_the_context_graph_is_a_model_the_runtime_will_actually_build():
+    from image_processor.engine.cell_main import create_context_session, identity_model
+
+    assert identity_model().startswith(b"\x08")
+    session = create_context_session((CPU_PROVIDER,), provider_options((CPU_PROVIDER,)))
+    try:
+        assert [tensor.name for tensor in session.get_inputs()] == ["x"]
+        assert [tensor.name for tensor in session.get_outputs()] == ["y"]
+        answer = session.run(None, {"x": np.array([1.5], dtype=np.float32)})
+        assert answer[0].tolist() == [1.5]
+    finally:
+        del session

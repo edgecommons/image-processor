@@ -51,7 +51,7 @@ spool root the component mutates.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `devices` | string[] | `["0"]` | The devices the component may place sessions on, as CUDA ordinals (`"0"`) or device UUIDs. The component starts one executor cell per listed device. An empty list is the CPU-only development path and requires `runtime.allowCpuOnly`; a deployment that serves decisions names its devices. |
-| `residentMemoryBudgetPercent` | integer 1–100 | `80` | The share of each device's total memory that resident model sessions may occupy. The remainder absorbs activation peaks, allocator fragmentation, and any co-located process. |
+| `residentMemoryBudgetPercent` | integer 1–100 | `80` | The share of each device's total memory that resident model sessions may occupy. Each executor cell's CUDA context comes off this share once, because it is the cell's overhead rather than any model's. The remainder absorbs activation peaks, allocator fragmentation, and any co-located process. |
 | `reserveMiB` | integer ≥ 0 | `2048` | Device memory held back from the residency budget in absolute terms. Admission subtracts this reserve from free memory before it compares against a model's estimate, so a load never consumes the last free megabyte. |
 
 ## `component.global.scheduler`

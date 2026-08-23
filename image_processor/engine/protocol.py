@@ -146,11 +146,15 @@ class Loaded:
         providers_assigned: The session actual provider assignment, highest priority first.
         load_ms: Wall-clock milliseconds the load and its warmup took. This is the measured reload
             cost the residency policy prices an eviction against.
-        device_mib: Device memory the load consumed, measured across it, or ``0`` when no device
-            probe is available.
+        device_mib: Device memory this model occupies, measured across the load from a baseline
+            taken after the cell device context exists, or ``0`` when no device probe is
+            available. It carries the model alone: the context is not part of it.
         warmup_samples: Golden warmup samples compared against the manifest tolerances.
         gpu_device: The device ordinal as a string, or ``None`` for a CPU cell.
         gpu_class: The device name reported by NVML, or ``None`` when unknown.
+        context_mib: The device context this load established, measured on its own before the
+            session was built, or ``0`` when the cell already had one. Only the first load on a
+            device cell carries it, because a context is created once per process and then stays.
     """
 
     digest: str
@@ -160,6 +164,7 @@ class Loaded:
     warmup_samples: int = 0
     gpu_device: Optional[str] = None
     gpu_class: Optional[str] = None
+    context_mib: int = 0
 
 
 @dataclass(frozen=True)
@@ -257,8 +262,11 @@ class CellStats:
         cell_id: The cell identity, as the supervisor named it.
         gpu_device: The device ordinal as a string, or ``None`` for a CPU cell.
         gpu_class: The device name reported by NVML, or ``None`` when unknown.
-        resident_mib: Measured device memory per resident digest.
+        resident_mib: Measured device memory per resident digest, the model alone in each case.
         inferences: Jobs this cell has answered since it started.
+        context_mib: The device context this cell holds, measured once before its first session,
+            or ``0`` on a CPU cell or one that has not loaded yet. It is fixed overhead for as
+            long as the cell lives, so the budget carries it once rather than per model.
     """
 
     resident: tuple = ()
@@ -270,6 +278,7 @@ class CellStats:
     gpu_class: Optional[str] = None
     resident_mib: dict = field(default_factory=dict)
     inferences: int = 0
+    context_mib: int = 0
 
 
 @dataclass(frozen=True)

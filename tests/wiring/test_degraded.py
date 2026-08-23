@@ -279,3 +279,68 @@ def test_reconciling_reports_the_state_each_open_intent_settled_into(running, ho
 
     assert outcome["reconciled"] == {inference_id: "COMPLETED"}
     assert running.reconcile("adhoc-inspect")["reconciled"] == {}
+
+
+# -- a degraded route says why it is degraded (DESIGN.md 12.3) -----------------------------------
+
+
+def _refuse_warmup(app, message: str) -> None:
+    """Make every warmup on this component fail the way a provider-policy refusal does.
+
+    Args:
+        app: The component.
+        message: The detail the failure carries.
+    """
+    from image_processor.artifacts import ArtifactError
+
+    def _warm(entry, bundle):
+        raise ArtifactError("WARMUP_FAILED", message)
+
+    app._artifacts.warm = _warm
+
+
+def test_a_route_degraded_by_its_model_carries_the_failure_as_its_reason(app, gg):
+    app._metrics.define()
+    app._supervisor.start()
+    _refuse_warmup(app, "PROVIDER_CPU_ONLY: the session landed on CPUExecutionProvider")
+    app._artifacts.reconcile()
+
+    app._tick()
+
+    reason = gg.find_event("route-degraded")["context"]["reason"]
+    assert "PROVIDER_CPU_ONLY" in reason
+    assert "WARMUP_FAILED" in reason
+    status = {entry.route_id: entry for entry in app.route_statuses()}["clearance-cam-01"]
+    assert status.last_error == reason
+    element = {item.instance: item for item in gg.connectivity_provider()}["clearance-cam-01"]
+    assert element.detail == reason
+
+
+def test_a_warmup_mismatch_reaches_the_operator_verbatim(app, gg):
+    app._metrics.define()
+    app._supervisor.start()
+    _refuse_warmup(app, "WARMUP_MISMATCH: golden sample 1 is outside the declared tolerance")
+    app._artifacts.reconcile()
+    app._tick()
+
+    assert "WARMUP_MISMATCH" in gg.find_event("route-degraded")["context"]["reason"]
+
+
+def test_a_successful_activation_clears_the_reason(app, gg):
+    app._metrics.define()
+    app._supervisor.start()
+    warm = app._artifacts.warm
+    _refuse_warmup(app, "PROVIDER_CPU_ONLY: the session landed on CPUExecutionProvider")
+    app._artifacts.reconcile()
+    app._tick()
+    assert app._artifacts.route_error("clearance-cam-01")
+
+    app._artifacts.warm = warm
+    # force, because the failed generation is inside its retry backoff; this is what
+    # reload-model-catalog does for an operator who has fixed the machine
+    assert app._artifacts.reconcile(force=True) >= 1
+
+    assert app._artifacts.route_error("clearance-cam-01") is None
+    status = {entry.route_id: entry for entry in app.route_statuses()}["clearance-cam-01"]
+    assert status.last_error is None
+    assert status.connected is True

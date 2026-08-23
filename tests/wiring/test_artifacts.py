@@ -357,3 +357,156 @@ def test_the_background_thread_reconciles_and_stops(parts):
         manager.stop(timeout_s=5)
 
     assert manager.counters["activated"] == 1
+
+
+# -- an activation is what unblocks the jobs the old configuration stranded (DESIGN.md 7) --------
+
+
+def _blocked(ledger, config, inference_id: str = "blocked-1", route_id: str = "clearance-cam-01"):
+    """Admit one job and leave it at ``BLOCKED_CONFIGURATION``.
+
+    Args:
+        ledger: The ledger to admit into.
+        config: The parsed configuration, for the route model reference.
+        inference_id: The job identity.
+        route_id: The owning route.
+
+    Returns:
+        The inference id.
+    """
+    from image_processor.types import Job, JobState, SourceIdentity, SourceKind
+
+    source = SourceIdentity(
+        kind=SourceKind.SPOOL,
+        route_id=route_id,
+        relative_path=f"{inference_id}.png",
+        bytes=1024,
+        sha256="a" * 64,
+    )
+    job = Job(
+        inference_id=inference_id,
+        route_id=route_id,
+        source=source,
+        model=config.routes[0].model_ref,
+        transform_version="1",
+        state=JobState.READY,
+    )
+    assert ledger.admit(job, 1024) is True
+    ledger.transition(inference_id, JobState.READY, JobState.CLAIMED)
+    ledger.transition(inference_id, JobState.CLAIMED, JobState.WAITING_MODEL)
+    ledger.transition(
+        inference_id,
+        JobState.WAITING_MODEL,
+        JobState.BLOCKED_CONFIGURATION,
+        last_error="PROVIDER_CPU_ONLY: no session landed on the required provider",
+    )
+    return inference_id
+
+
+def test_a_successful_activation_returns_blocked_jobs_to_ready(parts):
+    from image_processor.types import JobState
+
+    config, cache, ledger = parts
+    seen: list = []
+    manager = ArtifactManager(
+        config, cache, ledger, FakeSupervisor(), on_requeued=lambda route, n: seen.append((route, n))
+    )
+    _blocked(ledger, config)
+
+    assert manager.reconcile() == 1
+
+    assert ledger.get("blocked-1").state is JobState.READY
+    assert seen == [("clearance-cam-01", 1)]
+    assert manager.counters["requeued"] == 1
+
+
+def test_an_activation_that_changes_nothing_requeues_nothing(parts):
+    from image_processor.types import JobState
+
+    config, cache, ledger = parts
+    manager = ArtifactManager(config, cache, ledger, FakeSupervisor())
+    manager.reconcile()
+    _blocked(ledger, config)
+
+    assert manager.reconcile() == 0
+
+    assert ledger.get("blocked-1").state is JobState.BLOCKED_CONFIGURATION
+    assert manager.counters["requeued"] == 0
+
+
+def test_a_ledger_that_will_not_requeue_does_not_fail_the_activation(parts):
+    config, cache, ledger = parts
+    manager = ArtifactManager(config, cache, ledger, FakeSupervisor())
+    manager.ledger = _Refusing(ledger)
+
+    assert manager.reconcile() == 1
+    assert manager.counters["activated"] == 1
+    assert manager.counters["requeued"] == 0
+
+
+def test_a_requeue_listener_that_raises_does_not_fail_the_activation(parts):
+    config, cache, ledger = parts
+
+    def _explode(route_id, count):
+        raise RuntimeError("the scheduler is gone")
+
+    manager = ArtifactManager(config, cache, ledger, FakeSupervisor(), on_requeued=_explode)
+    _blocked(ledger, config)
+
+    assert manager.reconcile() == 1
+    assert manager.counters["requeued"] == 1
+
+
+def test_verified_reports_only_the_routes_whose_entry_holds_up(parts):
+    config, cache, ledger = parts
+    manager = ArtifactManager(config, cache, ledger, FakeSupervisor())
+
+    assert manager.verified("clearance-cam-01") is False, "nothing has been staged yet"
+    manager.reconcile()
+    assert manager.verified("clearance-cam-01") is True
+    assert manager.verified("no-such-route") is False
+
+
+def test_verified_is_false_for_a_route_naming_an_unconfigured_model(parts):
+    from dataclasses import replace
+
+    config, cache, ledger = parts
+    route = replace(
+        config.routes[0], model_ref=replace(config.routes[0].model_ref, id="not-configured")
+    )
+    manager = ArtifactManager(replace(config, routes=(route,)), cache, ledger, FakeSupervisor())
+    manager.reconcile()
+
+    assert manager.verified("clearance-cam-01") is False
+
+
+def test_a_failed_activation_is_recorded_against_the_route_and_cleared_by_a_good_one(parts):
+    config, cache, ledger = parts
+    supervisor = FakeSupervisor(
+        [LoadFailed(digest=config.models[0].digest, error="no session", error_class="transient",
+                    code="PROVIDER_CPU_ONLY")]
+    )
+    manager = ArtifactManager(config, cache, ledger, supervisor)
+
+    manager.reconcile()
+    assert "PROVIDER_CPU_ONLY" in manager.route_error("clearance-cam-01")
+
+    manager.supervisor = FakeSupervisor()
+    manager.reconcile(force=True)
+
+    assert manager.route_error("clearance-cam-01") is None
+
+
+class _Refusing:
+    """A ledger proxy whose requeue raises, so a failed requeue can be driven."""
+
+    def __init__(self, ledger) -> None:
+        self._ledger = ledger
+
+    def __getattr__(self, name):
+        """Forward everything but the requeue."""
+        return getattr(self._ledger, name)
+
+    def requeue_blocked(self, route_id=None):
+        """Refuse, the way a locked database does."""
+        raise RuntimeError("the ledger is locked")

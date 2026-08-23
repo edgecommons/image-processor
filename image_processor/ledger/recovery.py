@@ -11,6 +11,10 @@ here rather than in :data:`~image_processor.ledger.schema.TRANSITIONS`. The rule
   and its outbox rows are still eligible; the publisher picks them up.
 * ``CLEANUP_PENDING`` — untouched and listed in the report, because only the filesystem can say
   what happened; :class:`~image_processor.completion.actions.Completer.reconcile` decides.
+* ``BLOCKED_CONFIGURATION`` — untouched. The configuration that blocked those jobs is the
+  same configuration the process comes back on, so a restart is not the event that unblocks
+  them. A successful model activation or an operator catalog reload is, through
+  :meth:`~image_processor.ledger.ledger.Ledger.requeue_blocked`.
 
 The report also carries the sidecar bindings of every committed-but-unpublished job so the caller
 can run the DESIGN.md §7 filesystem reconciliation (an orphan sidecar is verified and adopted or
@@ -25,7 +29,11 @@ from typing import Iterable, Optional
 
 from image_processor.types import JobState
 
-#: Edges restart recovery may take. Deliberately separate from the forward lifecycle table.
+#: Edges recovery may take. Deliberately separate from the forward lifecycle table, because every
+#: edge here moves a job backwards, which the DESIGN.md §7 diagram never does. Restart recovery
+#: takes the first four; the last three are taken on demand, by
+#: :meth:`~image_processor.ledger.ledger.Ledger.requeue_for_reinference` and
+#: :meth:`~image_processor.ledger.ledger.Ledger.requeue_blocked`.
 RECOVERY_EDGES = frozenset(
     {
         (JobState.INFERENCING, JobState.READY),
@@ -34,6 +42,17 @@ RECOVERY_EDGES = frozenset(
         (JobState.RETRY_WAIT, JobState.READY),
         (JobState.RESULT_COMMITTED, JobState.READY),
         (JobState.PUBLISH_PENDING, JobState.READY),
+        (JobState.BLOCKED_CONFIGURATION, JobState.READY),
+    }
+)
+
+#: States :meth:`~image_processor.ledger.ledger.Ledger.requeue_for_reinference` may act on. Whether
+#: a job holds a committed result to invalidate is a different question from whether an edge back
+#: to ``READY`` exists for it at all, so it is asked against its own table.
+INVALIDATABLE_STATES = frozenset(
+    {
+        JobState.RESULT_COMMITTED,
+        JobState.PUBLISH_PENDING,
     }
 )
 

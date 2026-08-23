@@ -9,6 +9,7 @@ import pytest
 from ledger_support import MODEL, StepClock, admitted, build_job, row
 
 from image_processor.ledger import Ledger, RecoveryReport, edge_key, plan_recovery
+from image_processor.ledger.ledger import IllegalTransition
 from image_processor.ledger.recovery import RecoveryMove
 from image_processor.types import CleanupIntent, CompletionAction, JobState
 
@@ -231,3 +232,65 @@ def test_an_empty_report_reads_cleanly():
     assert report.total == 0
     assert report.count(JobState.INFERENCING, JobState.READY) == 0
     assert report.cleanup_pending == ()
+
+
+# -- BLOCKED_CONFIGURATION drains by configuration, not by restart (DESIGN.md 7) -----------------
+
+
+def test_requeue_blocked_returns_blocked_jobs_to_ready(ledger):
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION, inference_id="blocked-1")
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION, inference_id="blocked-2")
+    admitted(ledger, JobState.WAITING_MODEL, inference_id="waiting")
+
+    assert ledger.requeue_blocked() == 2
+    assert ledger.get("blocked-1").state is JobState.READY
+    assert ledger.get("blocked-2").state is JobState.READY
+    assert ledger.get("waiting").state is JobState.WAITING_MODEL
+
+
+def test_requeue_blocked_can_name_one_route(ledger):
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION, inference_id="cam-01-job", route_id="cam-01")
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION, inference_id="cam-02-job", route_id="cam-02")
+
+    assert ledger.requeue_blocked("cam-01") == 1
+    assert ledger.get("cam-01-job").state is JobState.READY
+    assert ledger.get("cam-02-job").state is JobState.BLOCKED_CONFIGURATION
+    assert ledger.requeue_blocked("cam-02") == 1
+    assert ledger.requeue_blocked("cam-02") == 0
+
+
+def test_requeue_blocked_keeps_the_block_reason(ledger):
+    admitted(ledger, JobState.WAITING_MODEL)
+    ledger.transition(
+        "job-1",
+        JobState.WAITING_MODEL,
+        JobState.BLOCKED_CONFIGURATION,
+        last_error="PROVIDER_CPU_ONLY: the session landed on CPU",
+    )
+    assert ledger.requeue_blocked() == 1
+    assert ledger.get("job-1").state is JobState.READY
+    assert "PROVIDER_CPU_ONLY" in ledger.last_error("job-1")
+
+
+def test_a_blocked_job_still_has_no_forward_edge_to_ready(ledger):
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION)
+    with pytest.raises(IllegalTransition):
+        ledger.transition("job-1", JobState.BLOCKED_CONFIGURATION, JobState.READY)
+    assert ledger.get("job-1").state is JobState.BLOCKED_CONFIGURATION
+
+
+def test_a_restart_leaves_blocked_jobs_where_they_are(ledger, reopen):
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION)
+    ledger.close()
+    store = reopen()
+    assert store.recover().transitions == {}
+    assert store.get("job-1").state is JobState.BLOCKED_CONFIGURATION
+    assert store.requeue_blocked() == 1
+    assert store.get("job-1").state is JobState.READY
+
+
+def test_requeue_for_reinference_still_refuses_a_blocked_job(ledger):
+    admitted(ledger, JobState.BLOCKED_CONFIGURATION)
+    with pytest.raises(IllegalTransition):
+        ledger.requeue_for_reinference("job-1", "SIDECAR_MISSING")
+    assert ledger.get("job-1").state is JobState.BLOCKED_CONFIGURATION

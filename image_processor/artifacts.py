@@ -78,9 +78,11 @@ class GenerationState:
         load_ms: Wall-clock milliseconds the warmup load took, measured on this device. It is the
             reload cost the residency policy prices an eviction against, and the number
             ``get-models`` reports.
-        device_mib: Device memory the warmup load consumed, measured across it, or ``0`` when no
-            device probe is available. It is what admission budgets against before the scheduler
-            loads this generation for real.
+        device_mib: Device memory this model occupies, measured across the warmup load from a
+            baseline taken after the cell device context exists, or ``0`` when no device probe is
+            available. It is the model alone, which is what admission budgets against before the
+            scheduler loads this generation for real; the context is fixed per-cell overhead the
+            scheduler carries once (DESIGN.md 10.2).
         error: The last failure, or ``None``.
         failed_at: When that failure happened, on the monotonic clock.
         routes: The routes that want this generation.
@@ -124,6 +126,8 @@ class ArtifactManager:
         events: The :class:`~image_processor.outputs.events.RouteEvents` helper, or ``None``.
         metrics: The :class:`~image_processor.metrics.ProcessorMetrics` accumulator, or ``None``.
         on_activated: Called with ``(route_id, previous_digest, digest)`` after a switch.
+        on_requeued: Called with ``(route_id, count)`` after configuration-blocked jobs were
+            returned to ``READY``, so the caller can hand them back to the scheduler.
         interval_secs: How often the background thread reconciles.
         retry_backoff_secs: How long a failed generation is left alone.
         warmup_timeout_s: The deadline for one warmup load.
@@ -142,6 +146,7 @@ class ArtifactManager:
         events: Any = None,
         metrics: Any = None,
         on_activated: Optional[Callable[[str, Optional[str], str], None]] = None,
+        on_requeued: Optional[Callable[[str, int], None]] = None,
         interval_secs: float = DEFAULT_INTERVAL_SECS,
         retry_backoff_secs: float = DEFAULT_RETRY_BACKOFF_SECS,
         warmup_timeout_s: float = DEFAULT_WARMUP_TIMEOUT_S,
@@ -160,10 +165,12 @@ class ArtifactManager:
         self._events = events
         self._metrics = metrics
         self._on_activated = on_activated
+        self._on_requeued = on_requeued
         self._clock = clock
         self._lock = threading.RLock()
         self._generations: dict = {}
         self._rollback: dict = {}
+        self._route_errors: dict = {}
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -173,6 +180,7 @@ class ArtifactManager:
             "stagingFailures": 0,
             "warmupFailures": 0,
             "rollbacks": 0,
+            "requeued": 0,
         }
 
     # -- configuration -----------------------------------------------------------------
@@ -243,7 +251,9 @@ class ArtifactManager:
         GPU. A session left behind here would hold device memory the scheduler's residency map
         knows nothing about, so every later admission would budget against a number that is
         already wrong (DESIGN.md 10.2). The measurements survive the unload: what the load cost
-        and what it occupied are carried back to the caller.
+        and what it occupied are carried back to the caller. What it occupied is the model alone,
+        because the cell establishes and measures its device context separately, so a warmup that
+        happens to be the first load on a cell does not report the context as model memory.
 
         Args:
             entry: The model entry being activated.
@@ -379,6 +389,7 @@ class ArtifactManager:
             self._fail(route, desired, exc.code, exc.message)
             return False
         state.error = None
+        self._route_errors.pop(route.id, None)
         if active == desired:
             return False
         self.ledger.set_route_generation(route.id, desired, desired)
@@ -395,11 +406,19 @@ class ArtifactManager:
                 self._on_activated(route.id, active, desired)
             except Exception:  # noqa: BLE001 - a listener failure is not an activation failure
                 logger.exception("the activation listener failed for %s", route.id)
+        self.requeue_blocked(route.id)
         self.collect()
         return True
 
     def _fail(self, route: Any, digest: str, code: str, message: str) -> None:
-        """Report a generation that could not be made active, keeping the last known good."""
+        """Report a generation that could not be made active, keeping the last known good.
+
+        The failure is recorded against the route as well as counted, because a route whose model
+        will not stage, warm, or activate is a degraded route and an operator asking why is asking
+        about this: :meth:`route_error` is what the ``route-degraded`` condition and the
+        per-instance connectivity detail line carry (DESIGN.md 12.3, 14).
+        """
+        self._route_errors[route.id] = f"{code}: {message}" if message else code
         which = "warmupFailures" if code == "WARMUP_FAILED" else "stagingFailures"
         self.counters[which] += 1
         if self._metrics is not None:
@@ -411,6 +430,78 @@ class ArtifactManager:
             self._events.model_warmup_failed(route.id, digest, message)
         else:
             self._events.model_staging_failed(route.id, digest, f"{code}: {message}")
+
+    def route_error(self, route_id: str) -> Optional[str]:
+        """Return why one route's model could not be made active, if it could not.
+
+        Args:
+            route_id: The route.
+
+        Returns:
+            The ``CODE: detail`` of the last staging, warmup, or activation failure, or ``None``
+            once the route has activated a generation. A successful pass clears it, so a value
+            here always describes the model the route is failing on now.
+        """
+        return self._route_errors.get(route_id)
+
+    def requeue_blocked(self, route_id: str) -> int:
+        """Give one route's configuration-blocked jobs another chance (DESIGN.md 7).
+
+        A job at ``BLOCKED_CONFIGURATION`` is pinned to a generation that would not load. An
+        activation that succeeded is the configuration change that unblocks it: the route is now
+        running a generation that did load, so the jobs go back to ``READY`` and the scheduler
+        runs them on its next pass.
+
+        A ledger that refuses is logged rather than raised. The activation itself succeeded, and a
+        route that is serving again must not be reported as failed because the jobs it stranded
+        earlier could not be moved.
+
+        Args:
+            route_id: The route whose blocked jobs are returned to ``READY``.
+
+        Returns:
+            How many jobs moved.
+        """
+        try:
+            moved = int(self.ledger.requeue_blocked(route_id))
+        except Exception:  # noqa: BLE001 - a failed requeue is not a failed activation
+            logger.warning(
+                "route %s could not requeue its configuration-blocked jobs", route_id,
+                exc_info=True,
+            )
+            return 0
+        if not moved:
+            return 0
+        self.counters["requeued"] += moved
+        logger.info("route %s returned %d configuration-blocked job(s) to READY", route_id, moved)
+        if self._on_requeued is not None:
+            try:
+                self._on_requeued(route_id, moved)
+            except Exception:  # noqa: BLE001 - a listener failure is not a requeue failure
+                logger.exception("the requeue listener failed for %s", route_id)
+        return moved
+
+    def verified(self, route_id: str) -> bool:
+        """Whether one route's catalog entry is staged and carries no activation failure.
+
+        Args:
+            route_id: The route.
+
+        Returns:
+            ``True`` when the route's desired generation is in the cache and the last pass over it
+            recorded no failure. ``reload-model-catalog`` reads it to decide whose
+            configuration-blocked jobs may go back to ``READY`` (DESIGN.md 7).
+        """
+        with self._lock:
+            config = self.config
+        route = config.route(route_id)
+        if route is None:
+            return False
+        entry = config.model_entry(route.model_ref)
+        if entry is None:
+            return False
+        state = self._generations.get(entry.digest)
+        return bool(state is not None and state.staged and not state.error)
 
     def rollback(self, route_id: str) -> Optional[str]:
         """Return one route retained rollback generation, if it has one.
