@@ -40,10 +40,16 @@ config.schema.json                  (WP1; the component.global + instances[] con
 tools/
   make_bundle.py           build + sign a bundle tarball from a directory (WP2)
   fetch_test_assets.py     download/verify tests/assets.json into tests/.cache (WP7)
+  update_goldens.py        tier-2 golden tolerances + the tool that rewrites tests/goldens/ (WP7)
+  build_anomaly_model.py   rebuild the PatchCore anomaly model from the fetched VisA capsules (WP7)
 tests/
   fixtures/build.py        synthetic ONNX graphs + images + camera-shaped spool fixtures (WP7)
   assets.json              pinned URL + SHA-256 manifest for tier-2 assets (WP7)
   goldens/*.json           committed tier-2 expected results (WP7)
+  live_models/             the EC_LIVE_MODELS tier-2 suite: bundles.py (per-model manifests),
+                           labels.py, runner.py, verify.py, line_clearance.py (tier-4 renderer),
+                           test_{classification,detection,segmentation,anomaly}.py (WP7)
+  tools/                   tier-1 tests for the WP7 tooling: fetch, goldens, renderer (WP7)
   unit + integration tests per package
 ```
 
@@ -474,7 +480,7 @@ class OutboxPublisher:                     # drains ledger.pending_outbox via gg
 | WP3 ledger | `feat/wp3-ledger` | `ledger/`, `completion/` | `types.py` |
 | WP4a families | `feat/wp4a-families` | `engine/decode.py`, `engine/families/`, `engine/decision.py`, `tests/fixtures/build.py` (synthetic models + images) | `types.py` |
 | WP5 sources | `feat/wp5-sources` | `sources/` | `types.py` |
-| WP7 assets | `feat/wp7-assets` | `tests/assets.json`, `tools/fetch_test_assets.py`, `tests/goldens/`, nightly workflow | WP4a fixtures |
+| WP7 assets | `feat/wp7-assets` | `tests/assets.json`, `tools/{fetch_test_assets,update_goldens,build_anomaly_model}.py`, `tests/goldens/`, `tests/live_models/`, `tests/tools/`, `.github/workflows/nightly-models.yml` | WP4a fixtures |
 | WP4b engine | `feat/wp4b-engine` | `engine/protocol.py`, `cell*.py`, `supervisor.py`, `scheduler.py`, `residency.py` | WP1, WP2, WP4a merged |
 | WP6 wiring | `feat/wp6-wiring` | `ImageProcessor.py`, `outputs/`, `commands.py`, `metrics.py`, `health.py`, `connectivity.py`, docs | all above merged |
 | WP8 camera playlist | camera-adapter `feat/sim-playlist` | `src/backend/sim.rs`, config, docs | — |

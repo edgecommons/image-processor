@@ -165,3 +165,101 @@ API — no CLI args needed.
 enforcing the 90% line-coverage gate; `.github/workflows/deploy-docs.yml` refreshes the docs site on
 doc-only pushes once this component is registered in `registry/components.json`. Both are inert until
 pushed to GitHub with the org secrets configured.
+
+## Run the real-model suite
+
+The real-model suite runs seven real ONNX exports — two ImageNet classifiers, three COCO
+detectors, a Pascal VOC segmentation model, and a PatchCore anomaly model — over real images and
+compares the answers to the JSON goldens in `tests/goldens/`. It runs nightly and on demand, not on
+every pull request, so you turn it on with `EC_LIVE_MODELS=1`.
+
+Models and images are never committed. `tests/assets.json` pins each one by URL, SHA-256, and byte
+count, and `tools/fetch_test_assets.py` verifies them into `tests/.cache/`, which is gitignored.
+
+### Fetch the corpus
+
+1. See what the corpus holds and what is already cached:
+
+   ```bash
+   python tools/fetch_test_assets.py --list
+   ```
+
+1. Fetch it. The default selection is about 440 MB and skips the assets marked optional:
+
+   ```bash
+   python tools/fetch_test_assets.py
+   ```
+
+   The command is idempotent: an asset already in the cache is re-hashed rather than downloaded
+   again. A file whose digest does not match the manifest is reported and the command exits
+   non-zero.
+
+1. To fetch one asset, or to add the optional ones, name them:
+
+   ```bash
+   python tools/fetch_test_assets.py --only model-yolox-nano
+   python tools/fetch_test_assets.py --include-optional
+   ```
+
+### Run the suite
+
+1. Run it with the switch set:
+
+   ```bash
+   EC_LIVE_MODELS=1 python -m pytest tests/live_models -o addopts="" -q
+   ```
+
+   Each model is packed into a signed bundle, staged through the content-addressed cache, and run
+   on `CPUExecutionProvider`, so the suite exercises the same install path a deployment uses.
+
+1. A model whose assets are missing skips with the command that fetches them, so a partial corpus
+   runs what it can.
+
+### Build the anomaly model
+
+The PatchCore model is built rather than downloaded, because PatchCore needs no training epochs and
+rebuilding it from the pinned dataset is cheaper than hosting a binary. It needs `anomalib` and
+`torch`, which are not dependencies of this component, so install them into a scratch environment:
+
+1. Fetch VisA, which is optional and about 1.8 GB:
+
+   ```bash
+   python tools/fetch_test_assets.py --only dataset-visa
+   ```
+
+1. Install the build dependencies and build the model:
+
+   ```bash
+   python -m venv .venv-anomalib
+   .venv-anomalib/bin/pip install anomalib onnx jsonpath-ng jsonschema cryptography
+   .venv-anomalib/bin/python tools/build_anomaly_model.py
+   ```
+
+   The build writes `model.onnx` and a `build.json` record into
+   `tests/.cache/model-patchcore-visa-capsules/`. The record carries the threshold the bundle
+   declares and the separation the memory bank achieves on held-out images. The build is
+   deterministic: the same VisA archive and the same arguments produce the same graph.
+
+1. Run the suite again. The anomaly tests skip with these instructions whenever the model is absent.
+
+### Update the goldens
+
+Regenerate a golden after a deliberate change to preprocessing, postprocessing, or the decision
+rules — never to make a failing comparison pass.
+
+1. Regenerate every golden from a real run:
+
+   ```bash
+   python tools/update_goldens.py
+   ```
+
+1. Regenerate one model's golden:
+
+   ```bash
+   python tools/update_goldens.py --only mobilenetv2-12
+   ```
+
+1. Read the diff before committing it. A changed top-1 label, a moved box, or a flipped decision
+   outcome is a behavior change, and the diff is where you see it.
+
+The same thing happens inside pytest with `--update-goldens`, which is what the tool passes through.

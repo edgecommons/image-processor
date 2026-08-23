@@ -1,0 +1,316 @@
+{
+  "bundle": {
+    "assetId": "model-patchcore-visa-capsules",
+    "modelId": "patchcore-visa-capsules",
+    "version": "1.0.0"
+  },
+  "family": "anomaly",
+  "images": [
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.368309,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.368309,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/000.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 39.984104,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 39.984104,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/001.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.028118,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.028118,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/002.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.102917,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.102917,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/003.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 39.92054,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 39.92054,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/004.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 39.920029,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 39.920029,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/005.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.189217,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.189217,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/006.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.359058,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.359058,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/007.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.346466,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.346466,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/008.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 39.444828,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 39.444828,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Normal/009.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 41.268932,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 41.268932,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/000.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 43.566154,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 43.566154,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/001.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 44.24575,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 44.24575,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/002.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 42.78624,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 42.78624,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/003.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 42.971573,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 42.971573,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/004.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 45.097996,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 45.097996,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/005.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 42.097359,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 42.097359,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/006.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 41.423561,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 41.423561,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/007.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": false,
+        "score": 40.72229,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 40.72229,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/008.JPG"
+    },
+    {
+      "anomaly": {
+        "anomalous": true,
+        "score": 48.423481,
+        "threshold": 41.979069
+      },
+      "decision": {
+        "confidence": 48.423481,
+        "outcome": "FAIL",
+        "pass": false,
+        "rule": "pass: $.anomaly.anomalous == False",
+        "threshold": 41.979069
+      },
+      "image": "dataset-visa/extracted/capsules/Data/Images/Anomaly/009.JPG"
+    }
+  ],
+  "model": "patchcore-visa-capsules",
+  "onnxruntime": "1.29.0",
+  "provider": "CPUExecutionProvider",
+  "tolerances": {
+    "scoreTolerance": 0.01
+  }
+}

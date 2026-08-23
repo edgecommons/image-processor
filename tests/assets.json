@@ -1,0 +1,1317 @@
+{
+  "schemaVersion": 1,
+  "description": "Pinned tier-2 test assets (DESIGN.md section 16.1, D-IP-17, D-IP-19). Every entry is fixed by URL, SHA-256, and byte count; tools/fetch_test_assets.py verifies each one into tests/.cache/<id>/. Models and images are never committed. Licenses are permissive by decision D-IP-17: YOLOv8 and YOLO11 (AGPL-3.0) and MVTec AD (CC BY-NC) are excluded.",
+  "assets": [
+    {
+      "id": "model-mobilenetv2-12",
+      "kind": "model",
+      "name": "mobilenetv2-12.onnx",
+      "uri": "https://media.githubusercontent.com/media/onnx/models/4f43949841cb55a0b98dc8fcd045431ccafd9f96/validated/vision/classification/mobilenet/model/mobilenetv2-12.onnx",
+      "sha256": "c0c3f76d93fa3fd6580652a45618618a220fced18babf65774ed169de0432ad5",
+      "bytes": 13964571,
+      "license": "Apache-2.0",
+      "source": "ONNX Model Zoo (onnx/models), validated/vision/classification/mobilenet, pinned at commit 4f43949841cb55a0b98dc8fcd045431ccafd9f96",
+      "notes": "ImageNet-1k classifier, opset 12, input input [batch_size,3,224,224] with a dynamic batch axis, output output [batch_size,1000] logits. Backs the classification bundle of the live suite."
+    },
+    {
+      "id": "model-resnet50-v1-12",
+      "kind": "model",
+      "name": "resnet50-v1-12.onnx",
+      "uri": "https://media.githubusercontent.com/media/onnx/models/4f43949841cb55a0b98dc8fcd045431ccafd9f96/validated/vision/classification/resnet/model/resnet50-v1-12.onnx",
+      "sha256": "3f03fdef724b22947eed826f1eef1dc5c34151bb4c37d634f1db89dfa2dd1526",
+      "bytes": 102576593,
+      "license": "Apache-2.0",
+      "source": "ONNX Model Zoo (onnx/models), validated/vision/classification/resnet, pinned at commit 4f43949841cb55a0b98dc8fcd045431ccafd9f96",
+      "notes": "ImageNet-1k classifier, opset 12, input data [N,3,224,224] with a dynamic batch axis, output resnetv17_dense0_fwd [N,1000] logits."
+    },
+    {
+      "id": "model-yolox-nano",
+      "kind": "model",
+      "name": "yolox_nano.onnx",
+      "uri": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_nano.onnx",
+      "sha256": "c789161ed43c8269fcd4e67c67eeeb4e80c622da2eb296a20bc6007bd18a0b7d",
+      "bytes": 3659407,
+      "license": "Apache-2.0",
+      "source": "Megvii-BaseDetection/YOLOX release 0.1.1rc0",
+      "notes": "COCO detector, anchor-free grid head exported without in-graph decoding: input images [1,3,416,416], output output [1,3549,85] of (dx,dy,log w,log h,objectness,80 class scores) with objectness and class scores already sigmoid-activated. Drives the yoloxGrid decode path."
+    },
+    {
+      "id": "model-yolox-s",
+      "kind": "model",
+      "name": "yolox_s.onnx",
+      "uri": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.onnx",
+      "sha256": "c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063",
+      "bytes": 35858002,
+      "license": "Apache-2.0",
+      "source": "Megvii-BaseDetection/YOLOX release 0.1.1rc0",
+      "notes": "COCO detector, same head as YOLOX-Nano at 640x640: input images [1,3,640,640], output output [1,8400,85]."
+    },
+    {
+      "id": "model-ssd-mobilenetv1-12",
+      "kind": "model",
+      "name": "ssd_mobilenet_v1_12.onnx",
+      "uri": "https://media.githubusercontent.com/media/onnx/models/4f43949841cb55a0b98dc8fcd045431ccafd9f96/validated/vision/object_detection_segmentation/ssd-mobilenetv1/model/ssd_mobilenet_v1_12.onnx",
+      "sha256": "b8fba5e404077d4048d27fcd1667e85e27e192eb9bf51e696c46a3acd7d21058",
+      "bytes": 29461455,
+      "license": "MIT",
+      "source": "ONNX Model Zoo (onnx/models), validated/vision/object_detection_segmentation/ssd-mobilenetv1, pinned at commit 4f43949841cb55a0b98dc8fcd045431ccafd9f96",
+      "notes": "COCO detector with an already-decoded head and in-graph resizing and suppression: input inputs uint8 NHWC with dynamic height and width, outputs detection_boxes [1,N,4] normalized yxyx, detection_scores [1,N], detection_classes [1,N] as one-based COCO category ids, num_detections [1]. Drives the decodedBoxes decode path."
+    },
+    {
+      "id": "model-fcn-resnet50-12",
+      "kind": "model",
+      "name": "fcn-resnet50-12.onnx",
+      "uri": "https://media.githubusercontent.com/media/onnx/models/4f43949841cb55a0b98dc8fcd045431ccafd9f96/validated/vision/object_detection_segmentation/fcn/model/fcn-resnet50-12.onnx",
+      "sha256": "eb5017d1b80372eb0b58552655274698817ba2e774437e2c2d3c0a613d2e99bd",
+      "bytes": 141193555,
+      "license": "MIT",
+      "source": "ONNX Model Zoo (onnx/models), validated/vision/object_detection_segmentation/fcn, pinned at commit 4f43949841cb55a0b98dc8fcd045431ccafd9f96",
+      "notes": "Pascal VOC 21-class semantic segmentation, input input [batch,3,height,width], outputs out and aux [batch,21,height,width]. Stands in for DeepLabV3-MobileNetV3, which the ONNX Model Zoo does not publish and which has no other prebuilt permissively licensed ONNX; only out is declared in the bundle and read by the segmentation family."
+    },
+    {
+      "id": "labels-imagenet-synset",
+      "kind": "dataset",
+      "name": "synset.txt",
+      "uri": "https://raw.githubusercontent.com/onnx/models/4f43949841cb55a0b98dc8fcd045431ccafd9f96/validated/vision/classification/synset.txt",
+      "sha256": "acf75ef0abe89694b19056e0796401068b459c457baa30335f240c7692857355",
+      "bytes": 31675,
+      "license": "Apache-2.0",
+      "source": "ONNX Model Zoo (onnx/models), validated/vision/classification/synset.txt, pinned at commit 4f43949841cb55a0b98dc8fcd045431ccafd9f96",
+      "notes": "The 1000 ImageNet-1k class names in the index order both classification models produce, one WordNet id and name list per line. The classification bundles carry the first name of each line as labels.json."
+    },
+    {
+      "id": "dataset-imagenette2-160",
+      "kind": "dataset",
+      "name": "imagenette2-160.tgz",
+      "uri": "https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz",
+      "sha256": "64d0c4859f35a461889e0147755a999a48b49bf38a7e0f9bd27003f10db02fe5",
+      "bytes": 99003388,
+      "license": "Apache-2.0",
+      "extract": "tar.gz",
+      "source": "fast.ai Imagenette (fastai/imagenette), fast-ai-imageclas S3 bucket",
+      "notes": "Ten easily told apart ImageNet classes at 160 pixels on the shorter side, laid out as imagenette2-160/val/<wnid>/<image>.JPEG. The directory name is the ImageNet class, so a top-1 label is checkable without any annotation file."
+    },
+    {
+      "id": "dataset-coco-val2017-slice",
+      "kind": "dataset",
+      "license": "COCO Terms of Use; annotations CC BY 4.0",
+      "source": "COCO val2017, the images.cocodataset.org bucket read over the path-style S3 endpoint",
+      "notes": "The first 200 val2017 images by image id. Images are test-only and never committed or redistributed. The path-style host is pinned because the TLS certificate images.cocodataset.org presents is issued for *.s3.amazonaws.com and does not match that name; the bytes are identical and every image carries its own SHA-256. Annotations are not fetched: the suite compares against its own committed goldens, not against COCO ground truth.",
+      "files": [
+        {
+          "name": "000000000139.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000139.jpg",
+          "sha256": "ffe0f0cec3b2e27aab1967229cdf0a0d7751dcdd5800322f0b8ac0dffb3b8a8d",
+          "bytes": 161811
+        },
+        {
+          "name": "000000000285.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000285.jpg",
+          "sha256": "f3a2974ce3686332609124c70e3e6a2e3aca43fccf1cd1bd7c5c03820977f57d",
+          "bytes": 335861
+        },
+        {
+          "name": "000000000632.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000632.jpg",
+          "sha256": "a4cd7f45ac1ce27eaafb254b23af7c0b18a064be08870ceaaf03b2147f2ce550",
+          "bytes": 155667
+        },
+        {
+          "name": "000000000724.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000724.jpg",
+          "sha256": "5c0e559c75d3969c8e3e297b61f61063f78045c9d4802b526ba616361f3823fd",
+          "bytes": 130107
+        },
+        {
+          "name": "000000000776.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000776.jpg",
+          "sha256": "1dd31e9059c491992be2f562624eb4093e17aee08b4f7baf5ff9ea24543b0a33",
+          "bytes": 176410
+        },
+        {
+          "name": "000000000785.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000785.jpg",
+          "sha256": "83981537a7baeafbeb9c8cb67b3484dc26433f574b3685d021fa537e277e4726",
+          "bytes": 133674
+        },
+        {
+          "name": "000000000802.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000802.jpg",
+          "sha256": "d5b79e7fa716f85ca86f46e5f518da9b6c5e26414925624d76e6476861aec495",
+          "bytes": 62406
+        },
+        {
+          "name": "000000000872.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000872.jpg",
+          "sha256": "c2aa138ee3a59b057a7ba6fc5a6a18e62af531aa7dab78a7bfd33c1cd7e55eb6",
+          "bytes": 317669
+        },
+        {
+          "name": "000000000885.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000885.jpg",
+          "sha256": "1c67b783f78b18ddb5dd20aaba4d4aacaf98e5277051688a96da096afa9cdf1f",
+          "bytes": 111441
+        },
+        {
+          "name": "000000001000.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001000.jpg",
+          "sha256": "24bb77a31928404e45a0454b06f6a0bd54a8db103590c9d7917288a1e0269f05",
+          "bytes": 321136
+        },
+        {
+          "name": "000000001268.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001268.jpg",
+          "sha256": "8e85a2e71ee512fe748a3a3be9bb40b8591e8c501c0f3896efcb5be5999ec236",
+          "bytes": 180751
+        },
+        {
+          "name": "000000001296.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001296.jpg",
+          "sha256": "34a98da7c11bc8811e6eec445145bb16f3d5f4338945ba116edcc1fe554d181b",
+          "bytes": 204829
+        },
+        {
+          "name": "000000001353.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001353.jpg",
+          "sha256": "1cccef217a1e5eec2acc74d7c08a105da3ef6fdb8514e221cdea9b0b373b60ea",
+          "bytes": 83033
+        },
+        {
+          "name": "000000001425.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001425.jpg",
+          "sha256": "71a37c25cdf944cf0a88b66d00a66cf899a88bd55c7ac80fcf1c76329d617e6c",
+          "bytes": 111309
+        },
+        {
+          "name": "000000001490.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001490.jpg",
+          "sha256": "a044804a0b0186a1267acae34975932f14ede96c4a2b78fcee74e6c2fbd8414d",
+          "bytes": 101098
+        },
+        {
+          "name": "000000001503.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001503.jpg",
+          "sha256": "06c721f0a62bcb9fcb2d2d0cc0b9edd63092084a8773a18c4b5a7bd6fb4f095d",
+          "bytes": 15259
+        },
+        {
+          "name": "000000001532.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001532.jpg",
+          "sha256": "974f2af6d81f65627a680ea9f42bdee1067a0ddcdb9f8e7a945bacd21d4dc2ce",
+          "bytes": 174022
+        },
+        {
+          "name": "000000001584.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001584.jpg",
+          "sha256": "77131e2f74aa7e374f951a69157cf7f51e00201f81bacfa8a9ab7309b245553f",
+          "bytes": 138202
+        },
+        {
+          "name": "000000001675.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001675.jpg",
+          "sha256": "6ba641627c08ef424b7dc3e6cee069aa0dd49615a31c54ae0de1ecd1fabd9dea",
+          "bytes": 97643
+        },
+        {
+          "name": "000000001761.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001761.jpg",
+          "sha256": "c06b1845c54bb886a8fb9f8a6e908b29ceb661ffda1ca8df9a27f123806de648",
+          "bytes": 115835
+        },
+        {
+          "name": "000000001818.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001818.jpg",
+          "sha256": "e638b349929d13bb27e148f4303a576e0a964ef81c0907d36748e0adb822a8e6",
+          "bytes": 203119
+        },
+        {
+          "name": "000000001993.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000001993.jpg",
+          "sha256": "039f3bfb862023bde7f835a36c32d8f59a3e66488863c2a47b7b746e78c44186",
+          "bytes": 110450
+        },
+        {
+          "name": "000000002006.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002006.jpg",
+          "sha256": "eda4af13818b566f8fa4f479e76286ad90cd5da2e8dfd530be0ab3637e1482ed",
+          "bytes": 202589
+        },
+        {
+          "name": "000000002149.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002149.jpg",
+          "sha256": "3ef0da375244c3fdbb45bcfe5689e8e46fb616c00250f9dce6aa34d301801ac5",
+          "bytes": 52707
+        },
+        {
+          "name": "000000002153.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002153.jpg",
+          "sha256": "8795ff243cf20405bd442631d5d1cb7e60665dd459c8d57f5764333808dd49fd",
+          "bytes": 136034
+        },
+        {
+          "name": "000000002157.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002157.jpg",
+          "sha256": "1a038609e5ceb0719105b1438d257c3d588e45384cb7ffe77b137e4d7e3ed477",
+          "bytes": 124713
+        },
+        {
+          "name": "000000002261.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002261.jpg",
+          "sha256": "1a0ad595a5675bdc7a5e95c04def56109c00d61168fd826158322fd538d70279",
+          "bytes": 197814
+        },
+        {
+          "name": "000000002299.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002299.jpg",
+          "sha256": "d53d17dd8ecded4ae25555a0b8e193445846c7db7a6199c3ea35b09b3021f99e",
+          "bytes": 103567
+        },
+        {
+          "name": "000000002431.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002431.jpg",
+          "sha256": "fa0ce7b066c2fe7bd0892aa2c6361943148db9766de60241e69d8026a18e05ad",
+          "bytes": 141124
+        },
+        {
+          "name": "000000002473.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002473.jpg",
+          "sha256": "2f1bfa7634a64f7999ba5488ec904ad1f85bbc63d0fe4b9fe35f52abbf8c5f4f",
+          "bytes": 95783
+        },
+        {
+          "name": "000000002532.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002532.jpg",
+          "sha256": "fc017f5308d348bdb6011f2312b10853ccd780a4a7369f48774ef67f499f2e77",
+          "bytes": 210376
+        },
+        {
+          "name": "000000002587.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002587.jpg",
+          "sha256": "bc37072a4f32bc99d6b02a684dd9bc69bd63567382315e5f497c9bb4a44c7208",
+          "bytes": 113812
+        },
+        {
+          "name": "000000002592.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002592.jpg",
+          "sha256": "ffa3d472d44184b1f48878f7b097189723e57a24f36c44c29e4bc561110fbf41",
+          "bytes": 103017
+        },
+        {
+          "name": "000000002685.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002685.jpg",
+          "sha256": "2430b9bffb5ff52dfbaf7b922ac8018547e233a5996a6b017bd1a206a46c5bdb",
+          "bytes": 272650
+        },
+        {
+          "name": "000000002923.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000002923.jpg",
+          "sha256": "46d2a5feb3f953b59316daee47b45332f07ebde1f88eb361f29b35c1fbbb62e0",
+          "bytes": 99783
+        },
+        {
+          "name": "000000003156.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003156.jpg",
+          "sha256": "3c929365d99581f03b70a810819df4781ac024d88dec7e592229cbea7489a779",
+          "bytes": 127189
+        },
+        {
+          "name": "000000003255.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003255.jpg",
+          "sha256": "c075f51a798e65d23e1c65a3fcc7736aeae4e03fbdd126f6d6b82cb07957d28b",
+          "bytes": 159111
+        },
+        {
+          "name": "000000003501.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003501.jpg",
+          "sha256": "9615e4dc9099e860748ce3f839ed077fa6a1fa39a10b909c00600bf4e2b3f392",
+          "bytes": 150713
+        },
+        {
+          "name": "000000003553.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003553.jpg",
+          "sha256": "4286197d2b6fc18809a37a4ef3035109509fcf52782fb83894835faaa5743bea",
+          "bytes": 148040
+        },
+        {
+          "name": "000000003661.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003661.jpg",
+          "sha256": "8746b068c166782f4b4fb7e6be9d16e5311e9c15bc867e21409b7f5d2eddefb4",
+          "bytes": 102617
+        },
+        {
+          "name": "000000003845.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003845.jpg",
+          "sha256": "d5c4394c712e5c24586f2531e2adf25d14e398993cc12af561ca760f20881df0",
+          "bytes": 163593
+        },
+        {
+          "name": "000000003934.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000003934.jpg",
+          "sha256": "c7b1180c75a332e8768a4ca76b1fe8b3e3e073e2b925d94f43fa5439535d5dcf",
+          "bytes": 138201
+        },
+        {
+          "name": "000000004134.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000004134.jpg",
+          "sha256": "2c922f6ec30f9c4eca2b373c8808f63979c26f4d89242754b3576bf78db1108b",
+          "bytes": 160116
+        },
+        {
+          "name": "000000004395.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000004395.jpg",
+          "sha256": "14ffbd7ab7a01e0dd7fc9676a688bd2c916766e2edb6e1d12ac9ae0ed07b122a",
+          "bytes": 77239
+        },
+        {
+          "name": "000000004495.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000004495.jpg",
+          "sha256": "cf670ca35fb16e59ecce82eecf9bf1f60d2ee333be81b61c4ea390be2c7e7b2b",
+          "bytes": 106634
+        },
+        {
+          "name": "000000004765.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000004765.jpg",
+          "sha256": "90fab997d1351b1c2ae1a437689245f962dbfa58e577911c9c83991490aadc5e",
+          "bytes": 139681
+        },
+        {
+          "name": "000000004795.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000004795.jpg",
+          "sha256": "6f8994bac6aef0602d4aa4397ecd4b7d579f5b18f66058a2df021352dd22bdc6",
+          "bytes": 165837
+        },
+        {
+          "name": "000000005001.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005001.jpg",
+          "sha256": "99600c56dc25c72dc1cc1d1f2b09aa33b97142560b54d034fa83a38fcf3c5b0f",
+          "bytes": 211700
+        },
+        {
+          "name": "000000005037.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005037.jpg",
+          "sha256": "b47318f2a6f652027f6435c462fae0567d925f67ab3279d08d5da2f322322dda",
+          "bytes": 182150
+        },
+        {
+          "name": "000000005060.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005060.jpg",
+          "sha256": "5d3d8315695f7c718b649c06afe32c792bcce9d4a97f544fc1ba19bc592d8cd3",
+          "bytes": 157329
+        },
+        {
+          "name": "000000005193.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005193.jpg",
+          "sha256": "2f0360e89d71b146cbfaee05e934303864fa61d9bf1a1f5cc0c2e508b8191b8d",
+          "bytes": 102722
+        },
+        {
+          "name": "000000005477.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005477.jpg",
+          "sha256": "3b3ed6a27e07126c2175d168405a9bffe60b0f03555d0ac4b33ec0788bd745f2",
+          "bytes": 154975
+        },
+        {
+          "name": "000000005503.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005503.jpg",
+          "sha256": "ff95bf5ddb4bdbd7f4f0f96d963cd941a0a2b38cfcf7832f25113e8441a443c6",
+          "bytes": 58617
+        },
+        {
+          "name": "000000005529.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005529.jpg",
+          "sha256": "e06b55bf935e76ac31cd8b8a56a3978e2f552d7c967ff8a0b8d0ae3b3445db0e",
+          "bytes": 224797
+        },
+        {
+          "name": "000000005586.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005586.jpg",
+          "sha256": "d7c4ce5acc9c578c41ff04aa60e610423e304e66b77fff92df501c207460b349",
+          "bytes": 36367
+        },
+        {
+          "name": "000000005600.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005600.jpg",
+          "sha256": "37e5625d5de54eb524ad2425d855e1d9d54fcb29c3475dacffc86ab48bcaec39",
+          "bytes": 134559
+        },
+        {
+          "name": "000000005992.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000005992.jpg",
+          "sha256": "c33842fbbd9626843b93ede50dd4908221cb0c9bf9837f58861354eec2a4ec56",
+          "bytes": 180732
+        },
+        {
+          "name": "000000006012.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006012.jpg",
+          "sha256": "7cd0d627b15c09f373aa613d013fb2d8ae6bd20bcce0d98aa31b963e6bcca495",
+          "bytes": 166135
+        },
+        {
+          "name": "000000006040.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006040.jpg",
+          "sha256": "ac74264bbc3356e0cb87cdc2edac2e2f7e519ae2c16b0a4e2b943a695163ebf6",
+          "bytes": 161100
+        },
+        {
+          "name": "000000006213.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006213.jpg",
+          "sha256": "0f8ce814489c07920e1f3c3a08842ff832f66340a4487d49de2feb31a45b8132",
+          "bytes": 125937
+        },
+        {
+          "name": "000000006460.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006460.jpg",
+          "sha256": "2526fc01ddf5bef5c5e6e1f665d63b6bc95d8ec14eab286dc080e95f9a3642cd",
+          "bytes": 119914
+        },
+        {
+          "name": "000000006471.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006471.jpg",
+          "sha256": "67fe4f0a7b71ecee846273d654bb8387c180229dc6c4a3060152aed0a776762f",
+          "bytes": 96115
+        },
+        {
+          "name": "000000006614.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006614.jpg",
+          "sha256": "5c4214d0503ea4ad699298cdca84ab631496d58d0ccdc4f6bafba9553fe067c6",
+          "bytes": 86815
+        },
+        {
+          "name": "000000006723.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006723.jpg",
+          "sha256": "1d3ba71e9002721a2bc18791f3c86578d6de38fb61640803657276d53e73663f",
+          "bytes": 200461
+        },
+        {
+          "name": "000000006763.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006763.jpg",
+          "sha256": "e3d8430df8ae6fd8021ca48ce988bcb8a1ae648be8bd3b73b1f0cc9c37f82484",
+          "bytes": 111031
+        },
+        {
+          "name": "000000006771.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006771.jpg",
+          "sha256": "b2cc81a8ab0c23da44dda4b6526515c68dbcb1abf939a371f750ffe22db15f95",
+          "bytes": 138318
+        },
+        {
+          "name": "000000006818.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006818.jpg",
+          "sha256": "99479f61ef2931ea70e161db0859e8706c6e48f13e8cb0798959f52433b01b98",
+          "bytes": 77539
+        },
+        {
+          "name": "000000006894.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006894.jpg",
+          "sha256": "8e2059e2f11b0c3051d105255221dd1474ab9a80907de64f0908ae8234e97c8a",
+          "bytes": 119456
+        },
+        {
+          "name": "000000006954.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000006954.jpg",
+          "sha256": "59471a9bed5c28ac2f3ad56af1799340d6acb90f7c87d1f60360d1a9466e89ea",
+          "bytes": 266595
+        },
+        {
+          "name": "000000007088.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007088.jpg",
+          "sha256": "323e51d944faa233acfa36f23598bad7f8bae8107d089949ae792267bac03770",
+          "bytes": 263011
+        },
+        {
+          "name": "000000007108.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007108.jpg",
+          "sha256": "fe22617b02d85f3d180db14af3c300e95d259ae81035452a03f57b79e056fb78",
+          "bytes": 161781
+        },
+        {
+          "name": "000000007278.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007278.jpg",
+          "sha256": "b088f1fc8e86da21084e8c98b7dc9406c0da61d74e740925af6a7adeda3c3f34",
+          "bytes": 291912
+        },
+        {
+          "name": "000000007281.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007281.jpg",
+          "sha256": "57f3508e600d3370320487dde8665f208f11612a11caac0801c7f5fc19188ac3",
+          "bytes": 137409
+        },
+        {
+          "name": "000000007386.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007386.jpg",
+          "sha256": "1bb19f0a2a950a944d178c921fddaddda6f133df6367e9f75ffcaafe2cd43f83",
+          "bytes": 211976
+        },
+        {
+          "name": "000000007511.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007511.jpg",
+          "sha256": "105e70c573b87d7e3f034e1dc08cedcced39be4e52197139f52616c920dda3d7",
+          "bytes": 135698
+        },
+        {
+          "name": "000000007574.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007574.jpg",
+          "sha256": "4f26c847c2f49574978e96733efaec720dd1d1ba95a8220d0de012b7317eed47",
+          "bytes": 163988
+        },
+        {
+          "name": "000000007784.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007784.jpg",
+          "sha256": "2b472f58ae604977c3c288320aed7fa8823043758e1b40b9cede91921d7154eb",
+          "bytes": 65621
+        },
+        {
+          "name": "000000007795.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007795.jpg",
+          "sha256": "adba86ef9a0dd1557c6cd23a4833d2cec71881a3979ceff831136c367e5f2507",
+          "bytes": 153601
+        },
+        {
+          "name": "000000007816.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007816.jpg",
+          "sha256": "00132e042709fc7a66797374a42ff72d493a945d01afe2a48e5a526116a2aabe",
+          "bytes": 171711
+        },
+        {
+          "name": "000000007818.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007818.jpg",
+          "sha256": "1bb3ef4577a7c11c55545532c7ec81fe1336105e5f1b9f38e47129eae9365187",
+          "bytes": 108736
+        },
+        {
+          "name": "000000007888.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007888.jpg",
+          "sha256": "7c735e89b3699afc510053412ddea8e0370a1a5a2c9096713a5b255567747442",
+          "bytes": 132380
+        },
+        {
+          "name": "000000007977.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007977.jpg",
+          "sha256": "0acb919d23df8f5126d63556668272ed26d53fa97fbad958958c2bbe8164d690",
+          "bytes": 206738
+        },
+        {
+          "name": "000000007991.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000007991.jpg",
+          "sha256": "63c6fae2e3defd4bc1c6f346806aef03eb11ccbd7c6bda3e479d1fbafd486db1",
+          "bytes": 194363
+        },
+        {
+          "name": "000000008021.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008021.jpg",
+          "sha256": "235537407867a7b894e78b3aecb55b33b14b64cbb23ca376a00d34c62a1a63a6",
+          "bytes": 180088
+        },
+        {
+          "name": "000000008211.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008211.jpg",
+          "sha256": "8a52b7177994a207b4f463d591c3c0f1ffd00b42dcdf17cc8f8984bfae17d110",
+          "bytes": 268366
+        },
+        {
+          "name": "000000008277.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008277.jpg",
+          "sha256": "692fc5469af5fffdc0dac05e709a0ac1380dca32d4c57436903b122f3c3558dc",
+          "bytes": 206878
+        },
+        {
+          "name": "000000008532.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008532.jpg",
+          "sha256": "237e72d5ffb557b5052b918c01a4fb15e6bb7dd2151bba9c0538de0024c941f9",
+          "bytes": 109812
+        },
+        {
+          "name": "000000008629.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008629.jpg",
+          "sha256": "cb4972816eb01ebee8f3bde47a4993972951671e990dca797ad0fa9e0f385c11",
+          "bytes": 231097
+        },
+        {
+          "name": "000000008690.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008690.jpg",
+          "sha256": "feca143d5e249b9fcaca7090c2400125ee19c7ad883c11fffe55e8bb451e7429",
+          "bytes": 246519
+        },
+        {
+          "name": "000000008762.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008762.jpg",
+          "sha256": "8b8aa2412ac3502dbb4b8a7d7987359d4049cf70e7177748e907e3ddfa3211ce",
+          "bytes": 48914
+        },
+        {
+          "name": "000000008844.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008844.jpg",
+          "sha256": "bd8133fe5862ea2b0b308db3c1d96b23012f2f667d43cb524d35ac1b710670a4",
+          "bytes": 111826
+        },
+        {
+          "name": "000000008899.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000008899.jpg",
+          "sha256": "5643dd54684df9750a16660fcb033e3acda2eff9c809cb69acb428b1184cadd1",
+          "bytes": 284674
+        },
+        {
+          "name": "000000009378.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009378.jpg",
+          "sha256": "39ac6327aa1b887ff2ae06588576f497d642bbbf3682eb1eada4574087fcc1e5",
+          "bytes": 117675
+        },
+        {
+          "name": "000000009400.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009400.jpg",
+          "sha256": "1a613f9b09db3b7bedb626af3e3951ac1709f6036d4e1405f6e8463816108222",
+          "bytes": 104999
+        },
+        {
+          "name": "000000009448.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009448.jpg",
+          "sha256": "bd6ac1c94ef4599bd7f9d0f43ba0dab52b0afc34a872ee3acc83a20c8e8a6f3f",
+          "bytes": 339450
+        },
+        {
+          "name": "000000009483.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009483.jpg",
+          "sha256": "c7e6e15f4db067c3e09ab8605759be9d850e2d5c45ea4dfb9cda8f5d85308ea4",
+          "bytes": 116766
+        },
+        {
+          "name": "000000009590.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009590.jpg",
+          "sha256": "93cdd55e59cf7d32c481ca5b00b1b9c64f8b8f44020f64a97752a767fd7571ee",
+          "bytes": 155925
+        },
+        {
+          "name": "000000009769.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009769.jpg",
+          "sha256": "f5e6d63081ba8fbb2a59770144d7c2350de6a1a8288e15565df7dd1bd87d85bf",
+          "bytes": 327350
+        },
+        {
+          "name": "000000009772.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009772.jpg",
+          "sha256": "ab798f0ee5d1bed52376a5ee8bfbd973cb4c4fface481a9bc7a3ff5d9c57b4c7",
+          "bytes": 245584
+        },
+        {
+          "name": "000000009891.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009891.jpg",
+          "sha256": "dc8292c102663e64a5fcf7477e8ab5f5289660099817e7d52f40e3918784dc0e",
+          "bytes": 131797
+        },
+        {
+          "name": "000000009914.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000009914.jpg",
+          "sha256": "8033e21b153383291f443ff8c89459e405441eac88e4ee617825f19182106d5c",
+          "bytes": 162551
+        },
+        {
+          "name": "000000010092.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010092.jpg",
+          "sha256": "70eae5520682d2ad23ff01df57fc4f29cb3f5d4c1d63753d3b7f120f6a0d939b",
+          "bytes": 150418
+        },
+        {
+          "name": "000000010363.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010363.jpg",
+          "sha256": "2fd23c4c491520182a703d0df9c604f6b7ee8a592ad8743897870cf0260f47b2",
+          "bytes": 96128
+        },
+        {
+          "name": "000000010583.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010583.jpg",
+          "sha256": "f163a37f278b6edd09952332066e01a00cf80e3137b427dd49732b91edc3fa9b",
+          "bytes": 223763
+        },
+        {
+          "name": "000000010707.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010707.jpg",
+          "sha256": "a361abb7579193709ef3debbec6298bf0c540bece429c4aadb19be82e04ab6a0",
+          "bytes": 121031
+        },
+        {
+          "name": "000000010764.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010764.jpg",
+          "sha256": "83bf9d868bb6de24ac1ef63df6cd7116e11da51d84daabd91b9b24fcc74d63c1",
+          "bytes": 202945
+        },
+        {
+          "name": "000000010977.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010977.jpg",
+          "sha256": "fba520c270003f70a09bdbb9ab8ca856a4a6cde110c64f05879e96b755ca7af6",
+          "bytes": 54901
+        },
+        {
+          "name": "000000010995.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000010995.jpg",
+          "sha256": "19ee23abae8a3da6b5914987e991ea9ee8a9743309ae17db732426c8fa860fe2",
+          "bytes": 73294
+        },
+        {
+          "name": "000000011051.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011051.jpg",
+          "sha256": "fb0f943cc1b027c64e5dbbc486b1d62d431244565e68b730e2ff8264d51116db",
+          "bytes": 80740
+        },
+        {
+          "name": "000000011122.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011122.jpg",
+          "sha256": "74e9d13ddccbc52d2fd9da5984279a6218b250668e1ae1c6450be9d1ca2bc41a",
+          "bytes": 239715
+        },
+        {
+          "name": "000000011149.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011149.jpg",
+          "sha256": "5973b8f1d5a30de98b1dcb715f1c94928a676fff8e45283515d0474e51ac0abc",
+          "bytes": 176762
+        },
+        {
+          "name": "000000011197.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011197.jpg",
+          "sha256": "b6dbcc5c9e52f51480c4974ae6b15003ce25cd98fb936e2f26694fb7058fdbcb",
+          "bytes": 177196
+        },
+        {
+          "name": "000000011511.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011511.jpg",
+          "sha256": "4e24ed1528891621658ff01d23e8a74735cd18720d41f7fd2264044497ad2a0e",
+          "bytes": 188164
+        },
+        {
+          "name": "000000011615.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011615.jpg",
+          "sha256": "dc3d5cce23371a2b7d0be6bf423b5989e29195323b428ef0e639a1d97a3932ac",
+          "bytes": 111010
+        },
+        {
+          "name": "000000011699.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011699.jpg",
+          "sha256": "cb8a70787b3b7abc56a8ec8a6efcea9a4d2ccabd645b17d73054b9514759559f",
+          "bytes": 230382
+        },
+        {
+          "name": "000000011760.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011760.jpg",
+          "sha256": "929474fc4adc38fbd6a392607e27ae8785488ed13676d103c5361e9091333c49",
+          "bytes": 284804
+        },
+        {
+          "name": "000000011813.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000011813.jpg",
+          "sha256": "a7387846c67b6900e02eeca0b3fdddfde24d44e336950f38ee2b54a91d5874be",
+          "bytes": 74788
+        },
+        {
+          "name": "000000012062.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012062.jpg",
+          "sha256": "319d58f0fa008d076b766671a5b607f94614f6005f773adced54a57567aa28fb",
+          "bytes": 227134
+        },
+        {
+          "name": "000000012120.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012120.jpg",
+          "sha256": "5078da2ea4554eb91703e5fa0339c4d0c875ded1783a8f4ee32ece2b558178c4",
+          "bytes": 137855
+        },
+        {
+          "name": "000000012280.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012280.jpg",
+          "sha256": "158ef0b15ff392039468263fa18735f81b39de9e8a7753e1e1aba7037262da56",
+          "bytes": 169019
+        },
+        {
+          "name": "000000012576.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012576.jpg",
+          "sha256": "e819f39d02674a83e2c3ef722e93e9b3fd6f9e6bf016dc8d873f576e31169445",
+          "bytes": 244760
+        },
+        {
+          "name": "000000012639.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012639.jpg",
+          "sha256": "fb055f9572e8e059559a950b626a7a731683844f875b66523cbd8d29605d903f",
+          "bytes": 276515
+        },
+        {
+          "name": "000000012667.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012667.jpg",
+          "sha256": "0bf182b59b89f534d6f89a2b57c976c47b7f9a95e5e47a7f236b285b9211af14",
+          "bytes": 81731
+        },
+        {
+          "name": "000000012670.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012670.jpg",
+          "sha256": "00c989b165bdde8eb54cbe7d1fcfb0ae7b2ac7f5f23d83baea723e7d2acf7099",
+          "bytes": 187752
+        },
+        {
+          "name": "000000012748.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000012748.jpg",
+          "sha256": "9ccd35fa48729821628123c5d2a57742f49ece28f9813817cfd0ea3867f40831",
+          "bytes": 192300
+        },
+        {
+          "name": "000000013004.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013004.jpg",
+          "sha256": "09d489992329d2a17186a82781c7d23d8c687ee580567babc7494f9bc8b1220a",
+          "bytes": 129165
+        },
+        {
+          "name": "000000013177.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013177.jpg",
+          "sha256": "f93626195530f46ed849091160f8cccce1a255ca886fd5945f5719adc12dc789",
+          "bytes": 204364
+        },
+        {
+          "name": "000000013201.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013201.jpg",
+          "sha256": "b99aa5fe13f26b9350d136cbb103c95896d81bfa504087888f13f76f5bd4adce",
+          "bytes": 151219
+        },
+        {
+          "name": "000000013291.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013291.jpg",
+          "sha256": "1e46187ec49947bfd8dd22f4d774bddfe3e29ca863fe09530516598998b8e640",
+          "bytes": 124885
+        },
+        {
+          "name": "000000013348.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013348.jpg",
+          "sha256": "8371f759628048bd294db70d9fbacb6d4f2558a12c25337fa04fea6418c9922a",
+          "bytes": 164490
+        },
+        {
+          "name": "000000013546.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013546.jpg",
+          "sha256": "63129a14da61b57cbcd9b3403bc76a73d091e1940e1b416ae9f5c70b7a1dbb54",
+          "bytes": 130391
+        },
+        {
+          "name": "000000013597.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013597.jpg",
+          "sha256": "e2b4ec9273cf30313e97ba917e85fec88cd9bbcf599781373deae5101ae8f327",
+          "bytes": 86915
+        },
+        {
+          "name": "000000013659.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013659.jpg",
+          "sha256": "b357d19dee467587a8788ac4e5b45677f4fde1b62726c690795e188ae75d822b",
+          "bytes": 215292
+        },
+        {
+          "name": "000000013729.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013729.jpg",
+          "sha256": "a3b3689660e2db3d49e131e9856d3d06bb376400e8fa2afc1ce64c5c4765a4ef",
+          "bytes": 115491
+        },
+        {
+          "name": "000000013774.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013774.jpg",
+          "sha256": "d4a83955582202cd1c3586807245cec71bb38c856eee74d452c1ca752eed8655",
+          "bytes": 173437
+        },
+        {
+          "name": "000000013923.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000013923.jpg",
+          "sha256": "91494500cd053f1c4e547edc53f62edce2b088588bf9b4dbc8ceaea86ad4d49e",
+          "bytes": 184795
+        },
+        {
+          "name": "000000014007.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014007.jpg",
+          "sha256": "4fa388665548f563e50c107089669a589812c4a14cb1dd3b87860fb25bdd4b45",
+          "bytes": 115949
+        },
+        {
+          "name": "000000014038.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014038.jpg",
+          "sha256": "7dc972133bcc2e8e49ca1c2b7c20678eecb0c853e78f085f7270f295e1349350",
+          "bytes": 178459
+        },
+        {
+          "name": "000000014226.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014226.jpg",
+          "sha256": "7342b8ee76ae63bfa942cb6849300cb39618b2453b2a51ef48650970bdeb837a",
+          "bytes": 105783
+        },
+        {
+          "name": "000000014380.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014380.jpg",
+          "sha256": "f9e17866f4db47a88724f051f0cd2a2650168c09ab6908bc4f75e5dba398ba1b",
+          "bytes": 203111
+        },
+        {
+          "name": "000000014439.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014439.jpg",
+          "sha256": "fc23e512cfe33e0b7f5e3445dc4189eb053fed6a16964b2454775a6df3fa5eba",
+          "bytes": 195229
+        },
+        {
+          "name": "000000014473.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014473.jpg",
+          "sha256": "1b0fad3e8260366a27f9cb20fdd0f9d7c669bb40a535f6364b8c2e1c03d7b5c2",
+          "bytes": 166405
+        },
+        {
+          "name": "000000014831.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014831.jpg",
+          "sha256": "ac9629cb598e5d30bbb0a174a01ac4e398de3d54ef8c5bac4f81a738597c39cd",
+          "bytes": 209469
+        },
+        {
+          "name": "000000014888.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000014888.jpg",
+          "sha256": "aba25018b65a2a52ce7d77e68c6501e532084cd327e6cb230225e302fca95f4c",
+          "bytes": 199176
+        },
+        {
+          "name": "000000015079.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015079.jpg",
+          "sha256": "a44d7b20692b108c648ba73018390297bad07d23b8be13dd24bc637bd31534ba",
+          "bytes": 106213
+        },
+        {
+          "name": "000000015254.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015254.jpg",
+          "sha256": "a03e74678aedee90fe6777e9ba4eef8b3025ba0b6f426723b2cf2b35c5ffef4f",
+          "bytes": 120836
+        },
+        {
+          "name": "000000015272.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015272.jpg",
+          "sha256": "d4a09d9517fea54811b7fabb1274117a107c4cb8fdccfbcae4ced6dd82034ce5",
+          "bytes": 344568
+        },
+        {
+          "name": "000000015278.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015278.jpg",
+          "sha256": "7f16701e7994ba6bfffe83abaa9d87b128c0d612e11f014001c51a6fc10ade58",
+          "bytes": 170921
+        },
+        {
+          "name": "000000015335.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015335.jpg",
+          "sha256": "9fbfdb443c249bdac83b8d0c9d4120a817cdf3987a7826a90e9fcbc95b535986",
+          "bytes": 227501
+        },
+        {
+          "name": "000000015338.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015338.jpg",
+          "sha256": "b9e7f3f58e1568b0af83d0494d21614a38bb212da2d4b14bc36bd002c0b6f0ad",
+          "bytes": 213912
+        },
+        {
+          "name": "000000015440.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015440.jpg",
+          "sha256": "477f0dd9751336fc5e5ef0f7c406506998049de4edae936311a4400c934c8419",
+          "bytes": 129400
+        },
+        {
+          "name": "000000015497.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015497.jpg",
+          "sha256": "fc0fff04645dfadedbc34e23860dc62c45a213ac22d18b8194d269b66774d745",
+          "bytes": 72623
+        },
+        {
+          "name": "000000015517.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015517.jpg",
+          "sha256": "db13a24631806ad53b865d8edb4926d455cf54ae60e72b45778e5e58fb164369",
+          "bytes": 194615
+        },
+        {
+          "name": "000000015597.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015597.jpg",
+          "sha256": "e34e098c9a41160f1f6cd0181d946ddca4e31bb94af38c060e36d6ec4f406e79",
+          "bytes": 147400
+        },
+        {
+          "name": "000000015660.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015660.jpg",
+          "sha256": "d908b9557857567ac19501f12f6c090ba3568d11421a2fe6296133a27e48a991",
+          "bytes": 128180
+        },
+        {
+          "name": "000000015746.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015746.jpg",
+          "sha256": "ba79e69d4272bc31ea4fb9f3731e020a9c8acf1fbf3b6ffb78528d70e2e183f7",
+          "bytes": 196039
+        },
+        {
+          "name": "000000015751.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015751.jpg",
+          "sha256": "e0929307bb91557c288fe98307c198a838abe835820322596232842784f6ce72",
+          "bytes": 117087
+        },
+        {
+          "name": "000000015956.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000015956.jpg",
+          "sha256": "c561d4e58f9141d15a5c4231075a51dbbf257e2901acc482765e15dcee1375b0",
+          "bytes": 191329
+        },
+        {
+          "name": "000000016010.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016010.jpg",
+          "sha256": "40ba5b198298d09e33f6428e28779a9cd9bc55756b2f9ae15c258672d6363ba3",
+          "bytes": 168853
+        },
+        {
+          "name": "000000016228.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016228.jpg",
+          "sha256": "b34d80f1f13989eb0c7031f95373a9e26c698397cb9511b422dcf5daba60110e",
+          "bytes": 187603
+        },
+        {
+          "name": "000000016249.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016249.jpg",
+          "sha256": "6b8ddae2940c3f03b1cec347e49fb9cf1c944a6142d71dbe7c7a3c2187852b34",
+          "bytes": 116588
+        },
+        {
+          "name": "000000016439.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016439.jpg",
+          "sha256": "8f09a3ac88ba6c74d0d8d0097e8a5aa0c58b7fdc3f51f36beafe8fa958f5e724",
+          "bytes": 101963
+        },
+        {
+          "name": "000000016451.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016451.jpg",
+          "sha256": "83fade2162445d292c33005ad31d9ad05de5a4691489b0762bc81ec401cb2cbc",
+          "bytes": 230063
+        },
+        {
+          "name": "000000016502.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016502.jpg",
+          "sha256": "171ce16f5646725403aed126091a0e3c88333a6fe4ea5c36f7c9b21ccfe2b30c",
+          "bytes": 89819
+        },
+        {
+          "name": "000000016598.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016598.jpg",
+          "sha256": "a794c8d8258774f04fcf04921d0daf10d60a35d038117279ff0880a2accd49b3",
+          "bytes": 212677
+        },
+        {
+          "name": "000000016958.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000016958.jpg",
+          "sha256": "8595370fdfc1ca1382a3eb464e53b2ae6c483d76d426d85b4fe0511ff25c0333",
+          "bytes": 155256
+        },
+        {
+          "name": "000000017029.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017029.jpg",
+          "sha256": "d619327903c6b05520f0d6768807c067cce2d6d908d2d83da018a1da3b1792cf",
+          "bytes": 349935
+        },
+        {
+          "name": "000000017031.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017031.jpg",
+          "sha256": "cbe18fd21bd5691cb27085cda1f10c3c5556d5918fcd04363a5e5b145ee3177b",
+          "bytes": 113005
+        },
+        {
+          "name": "000000017115.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017115.jpg",
+          "sha256": "ad0fc963b409ee072d6cc837cb58e9f0bf64de41fb4e5f13f20cc70dfe3c617b",
+          "bytes": 351522
+        },
+        {
+          "name": "000000017178.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017178.jpg",
+          "sha256": "89dd925868177ba4f2e4f82eb5f530bb8b839079bb58f872d78d8ab322c5a305",
+          "bytes": 166597
+        },
+        {
+          "name": "000000017182.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017182.jpg",
+          "sha256": "0ec7cbf35b5ff0352f9da0653eda2aaf5b578e7f2b5c8480c5b6c19fd2435141",
+          "bytes": 105405
+        },
+        {
+          "name": "000000017207.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017207.jpg",
+          "sha256": "fd477a26cf3682083ae6633c3778fcce9e53fdfbb0670232d608865ddb606884",
+          "bytes": 134840
+        },
+        {
+          "name": "000000017379.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017379.jpg",
+          "sha256": "52b592adcb73170d7d07994a8781e92feddf3c7f1c45173a050c7ecfe12e7743",
+          "bytes": 179753
+        },
+        {
+          "name": "000000017436.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017436.jpg",
+          "sha256": "8ea0f1195969c20030b2a7d90d008643582abeb0b7bff59a2fdd555d79c14ebf",
+          "bytes": 129858
+        },
+        {
+          "name": "000000017627.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017627.jpg",
+          "sha256": "bad16bff668a52e7df757c6382244c86b416315b86a52749dd7bc6ec68e7092f",
+          "bytes": 186973
+        },
+        {
+          "name": "000000017714.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017714.jpg",
+          "sha256": "ff331d262fea90025ec3b628757b047259f244b5a65550b1d0d079578179387a",
+          "bytes": 169159
+        },
+        {
+          "name": "000000017899.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017899.jpg",
+          "sha256": "2e1e630f37d1f6f1b0c06941ea56431c9be8701c928df634b8dbe9121e735fbb",
+          "bytes": 284188
+        },
+        {
+          "name": "000000017905.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017905.jpg",
+          "sha256": "5fcff2c9895b398fa086180c2fbe39b17a4e07d47282bd0b184599764afba33d",
+          "bytes": 185463
+        },
+        {
+          "name": "000000017959.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000017959.jpg",
+          "sha256": "8d525d9c133ee9ce8110fd8e2cca767d051bd22e8822c8f9ede6e72b7ff398d8",
+          "bytes": 121659
+        },
+        {
+          "name": "000000018150.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018150.jpg",
+          "sha256": "c49c2bb7e3ea8951c997f9984d13cb9f2bf8c1a0b4f7c398c0317f36435059f0",
+          "bytes": 205383
+        },
+        {
+          "name": "000000018193.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018193.jpg",
+          "sha256": "ee9037876bab7f2b504cd4be49144bbde27f32ddc05361cd6f3c843c947dd911",
+          "bytes": 102639
+        },
+        {
+          "name": "000000018380.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018380.jpg",
+          "sha256": "5f019938d891305fab6ae0d0e9edc79e0d74407cdbd0ecce324aada0ab93a86e",
+          "bytes": 279661
+        },
+        {
+          "name": "000000018491.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018491.jpg",
+          "sha256": "195369c44ad1810c524d5523a556356b2ee384310d7493310ccb8165c42767ed",
+          "bytes": 109544
+        },
+        {
+          "name": "000000018519.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018519.jpg",
+          "sha256": "87b0a064b596b4e821ebb371077c053e836c0ea667ca491075804bb3c9ce95ea",
+          "bytes": 184659
+        },
+        {
+          "name": "000000018575.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018575.jpg",
+          "sha256": "fe6cdcb9053cb1621bda79d13e20cad49b898678fb2279f772964d65698c3c6a",
+          "bytes": 151689
+        },
+        {
+          "name": "000000018737.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018737.jpg",
+          "sha256": "61b0ee16f913053290e0ee24971a6833b21290ee6a74039a0e0f3faa72dcf61c",
+          "bytes": 172938
+        },
+        {
+          "name": "000000018770.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018770.jpg",
+          "sha256": "92edb27a1c69e8e77d6ee17ddd2f12489d1852ff4c32c8357b329ba1fd26b046",
+          "bytes": 87553
+        },
+        {
+          "name": "000000018833.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018833.jpg",
+          "sha256": "3aaed3d8164deb6f7e5e18f3b1b3fc1b481d32078b342a07b629a7bdefc14e4d",
+          "bytes": 85243
+        },
+        {
+          "name": "000000018837.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000018837.jpg",
+          "sha256": "70f986167a5f1ea723ee2a25273f39ee1d1d7a3bf8b2fa3a37eca946111f1d93",
+          "bytes": 224384
+        },
+        {
+          "name": "000000019042.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019042.jpg",
+          "sha256": "c97e2e9a24160678ad908797a306d146354f66b196627a0bbb564c733b041007",
+          "bytes": 197906
+        },
+        {
+          "name": "000000019109.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019109.jpg",
+          "sha256": "5469f123ab838c9fdcc567c13148399dcb4cfa4eeee80e6e56a13627808a6d54",
+          "bytes": 265893
+        },
+        {
+          "name": "000000019221.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019221.jpg",
+          "sha256": "0085f80b9136c625b63fed2c233c432c3189841d5bf630a10e09ee1554c9bc79",
+          "bytes": 112695
+        },
+        {
+          "name": "000000019402.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019402.jpg",
+          "sha256": "b08173e02dc865e7f13fecbcbed574b70271c07fef6023236d0dea8d6bf77619",
+          "bytes": 173626
+        },
+        {
+          "name": "000000019432.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019432.jpg",
+          "sha256": "fa54de5a592c892ed3aceb11ebacff27abad01dc3bcef308943b097c1d65c0f0",
+          "bytes": 223434
+        },
+        {
+          "name": "000000019742.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019742.jpg",
+          "sha256": "6ccc37eeba5118114222f8de61228e95cf6c28fb631c9e759fcdcd450061337a",
+          "bytes": 91344
+        },
+        {
+          "name": "000000019786.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019786.jpg",
+          "sha256": "109307de9a894df50386a58dec9347e6c280ee024f426933e2e34bfd57478960",
+          "bytes": 79278
+        },
+        {
+          "name": "000000019924.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000019924.jpg",
+          "sha256": "b0bb42c6674456ecd9155b790a6a595646aacfe45ce80bd7667ac75fb7fe8bc8",
+          "bytes": 102366
+        },
+        {
+          "name": "000000020059.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000020059.jpg",
+          "sha256": "7bf0e3dc0cc83a62dfc9c9bfd57163cb541574a0b866fd1a555fdd24cd2859f2",
+          "bytes": 210318
+        },
+        {
+          "name": "000000020107.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000020107.jpg",
+          "sha256": "7c7e83890969c3bb7647cda61e17fa8ad3dc33210dbc9db616afb71f20958d3d",
+          "bytes": 106821
+        },
+        {
+          "name": "000000020247.jpg",
+          "uri": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000020247.jpg",
+          "sha256": "92a0ab00f3a0b9f6de5162449a8b79167363897fb489c172eebc244bccef23cb",
+          "bytes": 158661
+        }
+      ]
+    },
+    {
+      "id": "dataset-visa",
+      "kind": "dataset",
+      "name": "VisA_20220922.tar",
+      "uri": "https://amazon-visual-anomaly.s3.us-west-2.amazonaws.com/VisA_20220922.tar",
+      "sha256": "2eb8690c803ab37de0324772964100169ec8ba1fa3f7e94291c9ca673f40f362",
+      "bytes": 1929840640,
+      "license": "CC BY 4.0",
+      "optional": true,
+      "extract": "tar",
+      "source": "Amazon Visual Anomaly (VisA), amazon-science/spot-diff, the amazon-visual-anomaly S3 bucket",
+      "notes": "The capsules good and bad splits live at capsules/Data/Images/Normal and capsules/Data/Images/Anomaly. The bucket publishes only the full 12-object archive: listing it returns VisA.tar and VisA_20220922.tar and nothing smaller, so there is no capsules-only artifact to pin. Marked optional so the default fetch stays under two gigabytes; pass --include-optional or --only dataset-visa to get it."
+    }
+  ]
+}

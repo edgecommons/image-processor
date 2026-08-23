@@ -1,0 +1,757 @@
+{
+  "bundle": {
+    "assetId": "model-resnet50-v1-12",
+    "modelId": "resnet50-v1",
+    "version": "1.0.0"
+  },
+  "family": "classification",
+  "images": [
+    {
+      "classes": [
+        {
+          "index": 0,
+          "label": "tench",
+          "score": 0.997154
+        },
+        {
+          "index": 389,
+          "label": "barracouta",
+          "score": 0.001455
+        },
+        {
+          "index": 395,
+          "label": "gar",
+          "score": 0.000326
+        },
+        {
+          "index": 758,
+          "label": "reel",
+          "score": 0.000311
+        },
+        {
+          "index": 103,
+          "label": "platypus",
+          "score": 0.000101
+        }
+      ],
+      "decision": {
+        "confidence": 0.997154,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n01440764/ILSVRC2012_val_00009111.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 0,
+          "label": "tench",
+          "score": 0.99716
+        },
+        {
+          "index": 389,
+          "label": "barracouta",
+          "score": 0.002541
+        },
+        {
+          "index": 395,
+          "label": "gar",
+          "score": 0.00013
+        },
+        {
+          "index": 394,
+          "label": "sturgeon",
+          "score": 6.1e-05
+        },
+        {
+          "index": 391,
+          "label": "coho",
+          "score": 4.9e-05
+        }
+      ],
+      "decision": {
+        "confidence": 0.99716,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n01440764/ILSVRC2012_val_00009191.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 217,
+          "label": "English springer",
+          "score": 0.80169
+        },
+        {
+          "index": 152,
+          "label": "Japanese spaniel",
+          "score": 0.044168
+        },
+        {
+          "index": 232,
+          "label": "Border collie",
+          "score": 0.032788
+        },
+        {
+          "index": 220,
+          "label": "Sussex spaniel",
+          "score": 0.022698
+        },
+        {
+          "index": 215,
+          "label": "Brittany spaniel",
+          "score": 0.021153
+        }
+      ],
+      "decision": {
+        "confidence": 0.80169,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n02102040/ILSVRC2012_val_00004650.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 217,
+          "label": "English springer",
+          "score": 0.726047
+        },
+        {
+          "index": 215,
+          "label": "Brittany spaniel",
+          "score": 0.124932
+        },
+        {
+          "index": 238,
+          "label": "Greater Swiss Mountain dog",
+          "score": 0.022217
+        },
+        {
+          "index": 240,
+          "label": "Appenzeller",
+          "score": 0.014588
+        },
+        {
+          "index": 220,
+          "label": "Sussex spaniel",
+          "score": 0.012629
+        }
+      ],
+      "decision": {
+        "confidence": 0.726047,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n02102040/ILSVRC2012_val_00007032.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 482,
+          "label": "cassette player",
+          "score": 0.62541
+        },
+        {
+          "index": 848,
+          "label": "tape player",
+          "score": 0.301892
+        },
+        {
+          "index": 485,
+          "label": "CD player",
+          "score": 0.050209
+        },
+        {
+          "index": 754,
+          "label": "radio",
+          "score": 0.01406
+        },
+        {
+          "index": 481,
+          "label": "cassette",
+          "score": 0.007053
+        }
+      ],
+      "decision": {
+        "confidence": 0.62541,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n02979186/ILSVRC2012_val_00008651.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 482,
+          "label": "cassette player",
+          "score": 0.492955
+        },
+        {
+          "index": 848,
+          "label": "tape player",
+          "score": 0.450105
+        },
+        {
+          "index": 481,
+          "label": "cassette",
+          "score": 0.056722
+        },
+        {
+          "index": 485,
+          "label": "CD player",
+          "score": 0.000177
+        },
+        {
+          "index": 754,
+          "label": "radio",
+          "score": 1.2e-05
+        }
+      ],
+      "decision": {
+        "confidence": 0.492955,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.classes[0].score >= 0.5",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n02979186/ILSVRC2012_val_00020400.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 88,
+          "label": "macaw",
+          "score": 0.413709
+        },
+        {
+          "index": 92,
+          "label": "bee eater",
+          "score": 0.12187
+        },
+        {
+          "index": 90,
+          "label": "lorikeet",
+          "score": 0.09704
+        },
+        {
+          "index": 376,
+          "label": "proboscis monkey",
+          "score": 0.038124
+        },
+        {
+          "index": 795,
+          "label": "ski",
+          "score": 0.035931
+        }
+      ],
+      "decision": {
+        "confidence": 0.413709,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.classes[0].score >= 0.5",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03000684/ILSVRC2012_val_00004262.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 491,
+          "label": "chain saw",
+          "score": 0.987857
+        },
+        {
+          "index": 758,
+          "label": "reel",
+          "score": 0.006169
+        },
+        {
+          "index": 740,
+          "label": "power drill",
+          "score": 0.000932
+        },
+        {
+          "index": 795,
+          "label": "ski",
+          "score": 0.000895
+        },
+        {
+          "index": 916,
+          "label": "web site",
+          "score": 0.000729
+        }
+      ],
+      "decision": {
+        "confidence": 0.987857,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03000684/ILSVRC2012_val_00007460.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 562,
+          "label": "fountain",
+          "score": 0.699172
+        },
+        {
+          "index": 405,
+          "label": "airship",
+          "score": 0.057185
+        },
+        {
+          "index": 554,
+          "label": "fireboat",
+          "score": 0.039705
+        },
+        {
+          "index": 854,
+          "label": "theater curtain",
+          "score": 0.028517
+        },
+        {
+          "index": 483,
+          "label": "castle",
+          "score": 0.019555
+        }
+      ],
+      "decision": {
+        "confidence": 0.699172,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03028079/ILSVRC2012_val_00003351.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 442,
+          "label": "bell cote",
+          "score": 0.458502
+        },
+        {
+          "index": 663,
+          "label": "monastery",
+          "score": 0.256965
+        },
+        {
+          "index": 698,
+          "label": "palace",
+          "score": 0.1612
+        },
+        {
+          "index": 497,
+          "label": "church",
+          "score": 0.076489
+        },
+        {
+          "index": 557,
+          "label": "flagpole",
+          "score": 0.009152
+        }
+      ],
+      "decision": {
+        "confidence": 0.458502,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.classes[0].score >= 0.5",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03028079/ILSVRC2012_val_00003682.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 566,
+          "label": "French horn",
+          "score": 0.69674
+        },
+        {
+          "index": 875,
+          "label": "trombone",
+          "score": 0.221004
+        },
+        {
+          "index": 513,
+          "label": "cornet",
+          "score": 0.060875
+        },
+        {
+          "index": 776,
+          "label": "sax",
+          "score": 0.012726
+        },
+        {
+          "index": 618,
+          "label": "ladle",
+          "score": 0.003396
+        }
+      ],
+      "decision": {
+        "confidence": 0.69674,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03394916/ILSVRC2012_val_00001492.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 566,
+          "label": "French horn",
+          "score": 0.956424
+        },
+        {
+          "index": 513,
+          "label": "cornet",
+          "score": 0.040977
+        },
+        {
+          "index": 875,
+          "label": "trombone",
+          "score": 0.001496
+        },
+        {
+          "index": 776,
+          "label": "sax",
+          "score": 0.000521
+        },
+        {
+          "index": 683,
+          "label": "oboe",
+          "score": 9.4e-05
+        }
+      ],
+      "decision": {
+        "confidence": 0.956424,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03394916/ILSVRC2012_val_00003620.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 867,
+          "label": "trailer truck",
+          "score": 0.73699
+        },
+        {
+          "index": 675,
+          "label": "moving van",
+          "score": 0.118536
+        },
+        {
+          "index": 569,
+          "label": "garbage truck",
+          "score": 0.091731
+        },
+        {
+          "index": 660,
+          "label": "mobile home",
+          "score": 0.018863
+        },
+        {
+          "index": 864,
+          "label": "tow truck",
+          "score": 0.010646
+        }
+      ],
+      "decision": {
+        "confidence": 0.73699,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03417042/ILSVRC2012_val_00002210.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 569,
+          "label": "garbage truck",
+          "score": 0.993373
+        },
+        {
+          "index": 867,
+          "label": "trailer truck",
+          "score": 0.002526
+        },
+        {
+          "index": 856,
+          "label": "thresher",
+          "score": 0.001683
+        },
+        {
+          "index": 517,
+          "label": "crane",
+          "score": 0.001231
+        },
+        {
+          "index": 675,
+          "label": "moving van",
+          "score": 0.000638
+        }
+      ],
+      "decision": {
+        "confidence": 0.993373,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03417042/ILSVRC2012_val_00006922.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 480,
+          "label": "cash machine",
+          "score": 0.612491
+        },
+        {
+          "index": 571,
+          "label": "gas pump",
+          "score": 0.272409
+        },
+        {
+          "index": 886,
+          "label": "vending machine",
+          "score": 0.037059
+        },
+        {
+          "index": 771,
+          "label": "safe",
+          "score": 0.025436
+        },
+        {
+          "index": 742,
+          "label": "printer",
+          "score": 0.008293
+        }
+      ],
+      "decision": {
+        "confidence": 0.612491,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03425413/ILSVRC2012_val_00000732.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 571,
+          "label": "gas pump",
+          "score": 0.978869
+        },
+        {
+          "index": 856,
+          "label": "thresher",
+          "score": 0.010859
+        },
+        {
+          "index": 866,
+          "label": "tractor",
+          "score": 0.002356
+        },
+        {
+          "index": 707,
+          "label": "pay-phone",
+          "score": 0.000924
+        },
+        {
+          "index": 800,
+          "label": "slot",
+          "score": 0.000849
+        }
+      ],
+      "decision": {
+        "confidence": 0.978869,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03425413/ILSVRC2012_val_00001432.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 736,
+          "label": "pool table",
+          "score": 0.162158
+        },
+        {
+          "index": 574,
+          "label": "golf ball",
+          "score": 0.09544
+        },
+        {
+          "index": 701,
+          "label": "parachute",
+          "score": 0.077525
+        },
+        {
+          "index": 522,
+          "label": "croquet ball",
+          "score": 0.051215
+        },
+        {
+          "index": 892,
+          "label": "wall clock",
+          "score": 0.048746
+        }
+      ],
+      "decision": {
+        "confidence": 0.162158,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.classes[0].score >= 0.5",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03445777/ILSVRC2012_val_00008161.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 574,
+          "label": "golf ball",
+          "score": 0.997907
+        },
+        {
+          "index": 720,
+          "label": "pill bottle",
+          "score": 0.000489
+        },
+        {
+          "index": 429,
+          "label": "baseball",
+          "score": 0.000302
+        },
+        {
+          "index": 440,
+          "label": "beer bottle",
+          "score": 0.000246
+        },
+        {
+          "index": 737,
+          "label": "pop bottle",
+          "score": 0.000215
+        }
+      ],
+      "decision": {
+        "confidence": 0.997907,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03445777/ILSVRC2012_val_00009902.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 701,
+          "label": "parachute",
+          "score": 0.981617
+        },
+        {
+          "index": 728,
+          "label": "plastic bag",
+          "score": 0.016925
+        },
+        {
+          "index": 879,
+          "label": "umbrella",
+          "score": 0.000617
+        },
+        {
+          "index": 557,
+          "label": "flagpole",
+          "score": 0.000208
+        },
+        {
+          "index": 405,
+          "label": "airship",
+          "score": 0.000138
+        }
+      ],
+      "decision": {
+        "confidence": 0.981617,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03888257/ILSVRC2012_val_00001440.JPEG"
+    },
+    {
+      "classes": [
+        {
+          "index": 525,
+          "label": "dam",
+          "score": 0.337408
+        },
+        {
+          "index": 975,
+          "label": "lakeside",
+          "score": 0.121953
+        },
+        {
+          "index": 978,
+          "label": "seashore",
+          "score": 0.061797
+        },
+        {
+          "index": 976,
+          "label": "promontory",
+          "score": 0.059797
+        },
+        {
+          "index": 814,
+          "label": "speedboat",
+          "score": 0.048969
+        }
+      ],
+      "decision": {
+        "confidence": 0.337408,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.classes[0].score >= 0.5",
+        "threshold": 0.5
+      },
+      "image": "dataset-imagenette2-160/extracted/imagenette2-160/val/n03888257/ILSVRC2012_val_00002990.JPEG"
+    }
+  ],
+  "model": "resnet50-v1-12",
+  "onnxruntime": "1.29.0",
+  "provider": "CPUExecutionProvider",
+  "tolerances": {
+    "topK": 5,
+    "topKOverlap": 4
+  }
+}

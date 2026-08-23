@@ -1,0 +1,53 @@
+name: nightly-models
+
+# The tier-2 real-model suite (DESIGN.md section 16.1, D-IP-19). It runs nightly and on demand
+# rather than per pull request: the corpus is hundreds of megabytes over the network, and per-PR CI
+# stays fast and offline. `ci.yml` is untouched.
+
+on:
+  schedule:
+    # 03:17 UTC, off the hour so the job does not queue behind everything else scheduled at 03:00.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-models
+  cancel-in-progress: false
+
+jobs:
+  live-models:
+    name: tier-2 real models (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Every asset is pinned by URL and SHA-256, so the cache key is the manifest itself: change
+      # a pin and the corpus is fetched again, leave it alone and nothing crosses the network.
+      - name: Restore the pinned asset cache
+        uses: actions/cache@v4
+        with:
+          path: tests/.cache
+          key: test-assets-${{ hashFiles('tests/assets.json') }}
+
+      - run: pip install -r requirements.txt -r requirements-test.txt
+
+      # Verifies whatever the cache restored and downloads whatever is missing. A digest that does
+      # not match the manifest fails the job here, before a single model runs.
+      - name: Fetch and verify the corpus
+        run: python tools/fetch_test_assets.py
+
+      - name: List the corpus
+        run: python tools/fetch_test_assets.py --list
+
+      # `-o addopts=` drops the repository's default `-q` so the suite reports per test.
+      - name: Run the tier-2 suite
+        env:
+          EC_LIVE_MODELS: '1'
+        run: python -m pytest tests/live_models -o addopts="" -q

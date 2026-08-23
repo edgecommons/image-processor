@@ -1,0 +1,1936 @@
+{
+  "bundle": {
+    "assetId": "model-fcn-resnet50-12",
+    "modelId": "fcn-resnet50",
+    "version": "12"
+  },
+  "family": "segmentation",
+  "images": [
+    {
+      "decision": {
+        "confidence": 0.00145,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000139.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.905248,
+          "pixels": 244779
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.001712,
+          "pixels": 463
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.025096,
+          "pixels": 6786
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.017966,
+          "pixels": 4858
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.00145,
+          "pixels": 392
+        },
+        "pottedplant": {
+          "fraction": 0.000266,
+          "pixels": 72
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.048262,
+          "pixels": 13050
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000285.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.683343,
+          "pixels": 184776
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.099641,
+          "pixels": 26943
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.000181,
+          "pixels": 49
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.203898,
+          "pixels": 55134
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.012936,
+          "pixels": 3498
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000632.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.96872,
+          "pixels": 261942
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.030991,
+          "pixels": 8380
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.000288,
+          "pixels": 78
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000724.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 1.0,
+          "pixels": 270400
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.010688,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000776.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.973587,
+          "pixels": 263258
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.015725,
+          "pixels": 4252
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.010688,
+          "pixels": 2890
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.10645,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000785.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.89355,
+          "pixels": 241616
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.10645,
+          "pixels": 28784
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000802.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 1.0,
+          "pixels": 270400
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.180144,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000872.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.819856,
+          "pixels": 221689
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.180144,
+          "pixels": 48711
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.11179,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000000885.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.88821,
+          "pixels": 240172
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.11179,
+          "pixels": 30228
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.427108,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001000.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.566195,
+          "pixels": 153099
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.006697,
+          "pixels": 1811
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.427108,
+          "pixels": 115490
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.164408,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001268.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.826901,
+          "pixels": 223594
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.003206,
+          "pixels": 867
+        },
+        "boat": {
+          "fraction": 0.005484,
+          "pixels": 1483
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.164408,
+          "pixels": 44456
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.830078,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001296.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.169922,
+          "pixels": 45947
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.830078,
+          "pixels": 224453
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.170706,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001353.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.817256,
+          "pixels": 220986
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.010843,
+          "pixels": 2932
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.001195,
+          "pixels": 323
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.170706,
+          "pixels": 46159
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.037104,
+        "outcome": "HOLD",
+        "pass": false,
+        "rule": "pass: $.segments.person.fraction <= 0.02",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001425.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.862829,
+          "pixels": 233309
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.100067,
+          "pixels": 27058
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.037104,
+          "pixels": 10033
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.002748,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001490.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.997252,
+          "pixels": 269657
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.002748,
+          "pixels": 743
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001503.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.84233,
+          "pixels": 227766
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.15767,
+          "pixels": 42634
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001532.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.898968,
+          "pixels": 243081
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.101032,
+          "pixels": 27319
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.003791,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001584.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.590118,
+          "pixels": 159568
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.406091,
+          "pixels": 109807
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.003791,
+          "pixels": 1025
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001675.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "background": {
+          "fraction": 0.514885,
+          "pixels": 139225
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.485115,
+          "pixels": 131175
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    },
+    {
+      "decision": {
+        "confidence": 0.0,
+        "outcome": "CLEAR",
+        "pass": true,
+        "rule": "pass",
+        "threshold": 0.02
+      },
+      "image": "dataset-coco-val2017-slice/000000001761.jpg",
+      "segments": {
+        "aeroplane": {
+          "fraction": 0.008854,
+          "pixels": 2394
+        },
+        "background": {
+          "fraction": 0.991146,
+          "pixels": 268006
+        },
+        "bicycle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bird": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "boat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bottle": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "bus": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "car": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cat": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "chair": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "cow": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "diningtable": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "dog": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "horse": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "motorbike": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "person": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "pottedplant": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sheep": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "sofa": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "train": {
+          "fraction": 0.0,
+          "pixels": 0
+        },
+        "tvmonitor": {
+          "fraction": 0.0,
+          "pixels": 0
+        }
+      }
+    }
+  ],
+  "model": "fcn-resnet50-12",
+  "onnxruntime": "1.29.0",
+  "provider": "CPUExecutionProvider",
+  "tolerances": {
+    "fractionTolerance": 0.02
+  }
+}

@@ -330,3 +330,7 @@ logs/
 
 # WP4a -- the generated tier-1 test corpus. Nothing binary is committed.
 tests/fixtures/out/
+
+# WP7 -- the tier-2 asset cache. Real models and images are pinned by tests/assets.json and
+# fetched into this directory; nothing here is ever committed (D-IP-19).
+tests/.cache/
