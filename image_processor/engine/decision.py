@@ -393,3 +393,30 @@ def decide(normalized: Any, rules: dict) -> Decision:
         threshold=threshold,
         rule="pass" if passed else label,
     )
+
+
+# WP6 -- the decision mirror reads a few normalized values out of the committed result body with
+# the same JSONPath grammar the rules use, and this package owns the jsonpath-ng dependency
+# (LLD 3). Exposing the lookup here keeps it that way.
+def resolve_path(document: Any, path: str, default: Any = None) -> Any:
+    """Return the single value a JSONPath names in a document.
+
+    Args:
+        document: Any JSON-shaped value.
+        path: The JSONPath expression.
+        default: What to return when the path names nothing, does not parse, or cannot be
+            applied. A mirror publishes nothing rather than guessing.
+
+    Returns:
+        The first match in document order, or ``default``.
+    """
+    if not isinstance(path, str) or not path:
+        return default
+    try:
+        matches = _compiled(path).find(_document(document))
+    except Exception as error:  # noqa: BLE001 - an unusable path resolves to nothing
+        logger.debug("path %r could not be evaluated: %s", path, error)
+        return default
+    if not matches:
+        return default
+    return matches[0].value

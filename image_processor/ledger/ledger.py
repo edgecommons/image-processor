@@ -473,6 +473,51 @@ class Ledger:
             next_cursor = f"{last[_CREATED_AT_IDX]}|{last[0]}"
         return [_schema.row_to_job(r) for r in rows], next_cursor
 
+    # WP6 -- the queue surfaces (get-queue, the queue metrics, the queue-age condition, and the
+    # per-route connectivity) need a depth and an age per route. Both are one indexed query here
+    # and an unbounded page walk anywhere else, so they live beside the rows they count.
+    def counts_by_state(self, route_id: Optional[str] = None) -> dict:
+        """Count the jobs in each state.
+
+        Args:
+            route_id: Restrict to one route, or ``None`` for every route.
+
+        Returns:
+            ``{JobState: count}``, carrying only the states that have rows.
+        """
+        sql = "SELECT state, COUNT(*) FROM jobs"
+        params: tuple = ()
+        if route_id is not None:
+            sql += " WHERE route_id = ?"
+            params = (route_id,)
+        sql += " GROUP BY state"
+        return {JobState(row[0]): int(row[1]) for row in self._read(sql, params)}
+
+    def oldest_created_at_ms(
+        self, states: Iterable, route_id: Optional[str] = None
+    ) -> Optional[int]:
+        """Return when the oldest job in these states was admitted.
+
+        Args:
+            states: The :class:`~image_processor.types.JobState` values to consider.
+            route_id: Restrict to one route, or ``None`` for every route.
+
+        Returns:
+            The admission timestamp in milliseconds, or ``None`` when no job is in those states.
+        """
+        wanted = [state.value for state in states]
+        if not wanted:
+            return None
+        sql = "SELECT MIN(created_at_ms) FROM jobs WHERE state IN (%s)" % ", ".join(
+            "?" * len(wanted)
+        )
+        params = list(wanted)
+        if route_id is not None:
+            sql += " AND route_id = ?"
+            params.append(route_id)
+        row = self._read_one(sql, tuple(params))
+        return int(row[0]) if row and row[0] is not None else None
+
     # -- result and outbox -----------------------------------------------------------------
 
     def _insert_outbox_row(self, conn, inference_id: str, row: OutboxRow) -> int:

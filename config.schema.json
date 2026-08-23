@@ -75,7 +75,7 @@
       "properties": {
         "devices": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "uniqueItems": true,
           "default": ["0"],
           "items": {
@@ -83,7 +83,7 @@
             "minLength": 1,
             "description": "A CUDA device ordinal (`\"0\"`) or a device UUID (`\"GPU-6f1c...\"`)."
           },
-          "description": "The devices the component may place sessions on. The component starts one executor cell per listed device."
+          "description": "The devices the component may place sessions on. The component starts one executor cell per listed device. An empty list is the CPU-only development path and requires `runtime.allowCpuOnly`; a deployment that serves decisions names its devices."
         },
         "residentMemoryBudgetPercent": {
           "type": "integer",

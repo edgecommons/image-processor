@@ -149,15 +149,85 @@ off the approved origin.
 (or `docker compose up --build`).
 
 **Greengrass:** `gdk component build && gdk component publish`. The recipe's default configuration
-ships one working route — **edit its `publishTopic`** so the device token matches the thing you
-deploy to, because a processor with no valid routes has nothing to run and refuses to start. Set a
-real S3 bucket in `gdk-config.json` first — a scaffold with no bucket configured carries a visible
+ships two working routes and the CPU development profile, so point the routes at the spool the
+device's camera writes into, name the device's GPU ordinals in `gpu.devices`, drop
+`runtime.allowCpuOnly`, and point `models[].uri` at the object your deployment publishes. Set a real
+S3 bucket in `gdk-config.json` first — a repository with no bucket configured carries a visible
 sentinel that `component validate` treats as an error.
 
 **Kubernetes:** build `./Dockerfile`, push or `kind load` it, set `image:` in `k8s/deployment.yaml`,
 then `kubectl apply -f k8s/`. With `--platform auto` the library detects KUBERNETES, reads config
 from the mounted ConfigMap (hot-reloaded on `kubectl apply`), and resolves identity from the Downward
 API — no CLI args needed.
+
+## Add a route
+
+A route is one entry of `component.instances[]`, and routes are independent, so adding one is a
+configuration change rather than a code change. It needs four things: an `id` that is a valid UNS
+token, a `source`, a `modelRef` naming an entry of `global.models[]` by id, version, and digest, and
+a `completion` policy.
+
+1. Publish the model the route runs and add it to `global.models[]`, or reuse a model another route
+   already names — routes bound to the same digest share one resident session.
+2. Add the instance. [Sample configurations](sample-configurations.md) has a camera route and a
+   trigger route you can copy.
+3. Deploy. The candidate validator runs before the configuration becomes current, so a route that
+   would claim another route's spool, archive into a directory it reads, or name a model nobody
+   published is refused and the running configuration is left alone.
+
+The component reconciles routes without dropping admitted work: a route that appeared starts, a
+route that disappeared stops, and a route whose source or model changed is rebuilt, while jobs
+already in the ledger keep their pinned model generation and finish under it.
+
+## Repair a job a crash or an outage left behind
+
+Every durable state a job can be stuck in has an operator verb, and each one reports what the
+ledger and the filesystem actually show afterwards rather than assuming it worked.
+
+**A result that could not be published.** After `publish.maxAttempts` the job is
+`PUBLISH_EXHAUSTED`, the component emits `publish-exhausted`, and the input stays where it is —
+archiving it would move the evidence out from under a publication that is still expected to happen.
+When the broker is back:
+
+```bash
+ec-uns-cmd --device my-thing --component image-processor retry-publication
+ec-uns-cmd --device my-thing --component image-processor retry-publication --body '{"inferenceId": "blvuf6ru…"}'
+```
+
+**A completion that failed.** A move that collided with an existing object, or a directory that was
+not writable, leaves the job `CLEANUP_FAILED` with the intent still on record. The supervision pass
+retries it every few seconds; to retry now, or to see what is still failing:
+
+```bash
+ec-uns-cmd --device my-thing --component image-processor retry-cleanup
+```
+
+**Anything else that looks stuck.** `reconcile` re-decides every open cleanup intent against
+observed filesystem state — source present and target absent retries the move, source absent and
+target present with a matching digest completes, and a target holding different bytes is a
+collision rather than an overwrite:
+
+```bash
+ec-uns-cmd --device my-thing --component image-processor reconcile
+ec-uns-cmd --device my-thing --component image-processor get-queue --body '{"states": ["CLEANUP_FAILED", "PUBLISH_EXHAUSTED"]}'
+```
+
+**A model that will not stage.** `get-models` reports the error against the generation. Fix the
+source or the digest and re-evaluate the catalog without a redeployment:
+
+```bash
+ec-uns-cmd --device my-thing --component image-processor get-models
+ec-uns-cmd --device my-thing --component image-processor reload-model-catalog
+```
+
+**A route you need to stop feeding.** `pause` stops it claiming new work and lets in-flight jobs
+finish; `set-route-activation-override` persists the decision across restarts and is reported beside
+the configured value, so a deployment stays the source of truth for what the route is.
+
+```bash
+ec-uns-cmd --device my-thing --component image-processor --instance clearance-cam-01 pause
+ec-uns-cmd --device my-thing --component image-processor --instance clearance-cam-01   set-route-activation-override --body '{"enabled": false}'
+```
 
 ## Wire up CI
 

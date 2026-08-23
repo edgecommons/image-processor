@@ -752,7 +752,10 @@ def _parse_gpu(global_cfg: dict) -> GpuConfig:
         ("devices", "residentMemoryBudgetPercent", "reserveMiB"),
     )
     return GpuConfig(
-        devices=_strings(node, "devices", "global.gpu", default=("0",), min_items=1),
+        # An explicit empty list is the CPU-only development path (WP6): the supervisor runs a
+        # single CPU cell, and `runtime.allowCpuOnly` is what makes that legal. An omitted
+        # `devices` still defaults to the single-GPU deployment.
+        devices=_strings(node, "devices", "global.gpu", default=("0",), min_items=0),
         resident_memory_budget_percent=_number(
             node, "residentMemoryBudgetPercent", "global.gpu",
             default=80, integer=True, minimum=1, maximum=100,

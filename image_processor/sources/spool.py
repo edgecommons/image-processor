@@ -297,6 +297,35 @@ class SpoolSource:
             for relative_path, digest in pairs:
                 self._seen.add((str(relative_path), str(digest)))
 
+    # WP6 -- `reprocessExistingOnModelChange` (DESIGN.md §4.3) replays inputs that already
+    # reached a terminal state when a route switches model generation. The walk is what admits
+    # work, so forgetting what was announced is what makes the next walk see it again.
+    def forget(self, pairs: Optional[Iterable] = None) -> int:
+        """Forget announced inputs so the next walk rediscovers them.
+
+        A rediscovered input under a new model digest is a new job; under the same digest the
+        ledger recognizes the identity and refuses the duplicate, so this is never a way to
+        process the same image twice.
+
+        Args:
+            pairs: The ``(relative_path, sha256)`` pairs to forget, or ``None`` for all of them.
+
+        Returns:
+            How many pairs were forgotten.
+        """
+        with self._lock:
+            if pairs is None:
+                count = len(self._seen)
+                self._seen.clear()
+            else:
+                count = 0
+                for relative_path, digest in pairs:
+                    if (str(relative_path), str(digest)) in self._seen:
+                        self._seen.discard((str(relative_path), str(digest)))
+                        count += 1
+            self._rejected.clear()
+        return count
+
     def seen(self) -> set:
         """Return a copy of the announced ``(relative_path, sha256)`` pairs."""
         with self._lock:

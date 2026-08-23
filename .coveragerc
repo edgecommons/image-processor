@@ -36,3 +36,11 @@ exclude_lines =
 # `residency.NvmlProbe` (no GPU in CI; covered by the EC_NVIDIA suite), the runtime device lookup
 # in `CellState.device_class`, and the kill-a-wedged-child and close-a-closed-pipe branches in
 # `cell.py`. Nothing testable is excluded.
+
+# WP6 (wiring): image_processor/{ImageProcessor,artifacts,commands,metrics,health,connectivity}.py
+# and image_processor/outputs/ are covered by tests/wiring/ and tests/outputs/. There is no
+# `# pragma: no cover` in any of them: the live seams they used to need -- the transport, the
+# executor subprocess, the vault -- are reached through injected collaborators, so the fake bus in
+# tests/wiring/conftest.py exercises the same code the HOST smoke does. What remains uncovered is
+# a handful of defensive `except` branches around a collaborator failing in a way no test can
+# stage without breaking the collaborator itself.

@@ -1,34 +1,41 @@
 # ImageProcessor — Documentation
 
-*This documents the generated scaffold; rewrite it as you build the component out.*
-
-`com.mbreissi.edgecommons.ImageProcessor` is a Python **processing component** built on the `edgecommons` library: it
-subscribes to messages, transforms them through a pipeline of stages, and forwards the result. It
-runs as a Greengrass v2 component, a standalone HOST process, or a Kubernetes pod.
+`com.mbreissi.edgecommons.ImageProcessor` is the EdgeCommons Python inference component for image
+models. It loads signed, content-addressed ONNX model bundles, runs inference on finalized image
+files from a spool it owns or on subscription-triggered images, and publishes one durably confirmed
+inference result per image.
 
 ```text
-  subscribe(filter) ──► bounded queue ──► one thread per route ──► publish
-                                             (Pipeline)           local | northbound
+  camera spool ─┐                        ┌─► app/inference/result   (confirmed, cleanup-gating)
+                ├─► readiness ─► ledger ─┼─► data/<signal>          (decision mirror, best effort)
+  trigger topic ┘        │        │      ├─► <image>.inference.json (evidence sidecar)
+                         │        │      └─► processed/ | failed/   (the input, after confirmation)
+                         │        └─ executor cell (ONNX Runtime, CUDA or CPU)
+                         └─ model bundle cache (verified, warmed, atomically activated)
 ```
 
 | Doc | Start here when you want to… |
 |-----|------------------------------|
-| **[Tutorial](tutorial.md)** | learn by doing — run the scaffold end to end and watch it republish |
-| **[How-to guides](how-to-guides.md)** | accomplish a task — write a stage, add a route, deploy |
-| **[Reference](reference/)** | look up an exact config option, topic, or metric |
-| **[Explanation](explanation.md)** | understand the processor archetype and its non-negotiable guards |
+| **[Tutorial](tutorial.md)** | learn by doing — run one image through the component and read every output it produced |
+| **[How-to guides](how-to-guides.md)** | accomplish a task — build and sign a bundle, add a route, deploy, repair a stuck job |
+| **[Reference](reference/)** | look up an exact config option, topic, command, or metric |
+| **[Explanation](explanation.md)** | understand how an image becomes a job, and why the walk is authoritative |
 
 ## Quick routing
 
 - **"I'm new here."** → [Tutorial](tutorial.md).
 - **"What config option does X?"** → [Reference — Configuration](reference/configuration.md).
-- **"What message on which topic?"** → [Reference — Messaging Interface](reference/messaging-interface.md).
+- **"What message on which topic, and what does a command reply look like?"** →
+  [Reference — Messaging interface](reference/messaging-interface.md).
 - **"What does this metric mean?"** → [Reference — Metrics](reference/metrics.md).
-- **"What does a task family produce, and how do decision rules read it?"** → [Reference — Normalized output and decision rules](reference/data-types.md).
-- **"Why the self-echo guard? Why `get_messaging()` and not `data()`?"** → [Explanation](explanation.md).
+- **"What does a task family produce, and how do decision rules read it?"** →
+  [Reference — Normalized output and decision rules](reference/data-types.md).
+- **"What do I put in a config for a camera route, a trigger route, or a GPU device?"** →
+  [Sample configurations](sample-configurations.md).
+- **"Why does a lost camera announcement not lose an image?"** → [Explanation](explanation.md).
 
 ## Audience
 
-These docs are for whoever picks up this scaffold next — the integrator wiring a real route, and
-the operator deploying it. They describe the component **as generated**; once you add stages to
-`image_processor/pipeline.py` or routes to config, update the pages that describe them (see `AGENTS.md`).
+These pages are for the integrator wiring a camera to a model and the operator running the result.
+They describe what the component does; `DESIGN.md` and `LLD.md` in the repository root record why
+it does it that way and how the modules fit together.

@@ -17,7 +17,7 @@ from image_processor.engine.decode import (
     decode_image,
     is_high_bit_depth,
 )
-from image_processor.engine.decision import decide
+from image_processor.engine.decision import decide, resolve_path
 from image_processor.engine.families import FAMILIES, FamilyError, TaskFamily, family_for
 
 __all__ = [
@@ -30,4 +30,5 @@ __all__ = [
     "decode_image",
     "family_for",
     "is_high_bit_depth",
+    "resolve_path",
 ]

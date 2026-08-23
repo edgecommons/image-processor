@@ -1,7 +1,21 @@
+# Greengrass v2 recipe for ImageProcessor.
+#
+# The `component` block below is the same contract `config.schema.json` describes and
+# `test-configs/config.json` demonstrates; a deployment overrides it per device.
+#
+# Two settings are the development profile rather than a decision-serving one: `gpu.devices` is
+# empty and `runtime.allowCpuOnly` is set, which runs inference on the CPU. A device that serves
+# decisions names its GPU ordinals and drops `allowCpuOnly`, so a route whose provider policy
+# cannot be satisfied fails closed instead of answering from the CPU.
+#
+# `models[].uri` points at a local tarball. Point it at the `s3://` object your deployment
+# publishes and add the bucket prefix to `modelSources.allowedUriPrefixes`.
 RecipeFormatVersion: '2020-01-25'
 ComponentName: com.mbreissi.edgecommons.ImageProcessor
 ComponentVersion: 1.0.0
-ComponentDescription: Image inference processor: loads image-model bundles (ONNX Runtime, NVIDIA GPU), runs inference on finalized image files or subscription-triggered images, and publishes versioned inference results with evidence.
+ComponentDescription: 'Image inference processor: loads signed image-model bundles (ONNX Runtime, NVIDIA
+  GPU), runs inference on finalized image files or subscription-triggered images, and publishes a durably
+  confirmed inference result per image.'
 ComponentPublisher: EdgeCommons
 ComponentDependencies:
   aws.greengrass.TokenExchangeService:
@@ -17,11 +31,10 @@ ComponentConfiguration:
       heartbeat:
         enabled: true
         intervalSecs: 5
-        destination: local
         measures:
           cpu: true
           memory: true
-          disk: false
+        destination: local
       tags: {}
       metricEmission:
         target: cloudwatch
@@ -29,25 +42,116 @@ ComponentConfiguration:
         targetConfig:
           intervalSecs: 10
       component:
-        # UNS component token. The Greengrass ComponentName is reverse-DNS PascalCase; the token the
-        # wire carries is lower-kebab, so it is set explicitly rather than derived from the name.
         token: image-processor
         global:
-          defaults:
-            tickMs: 10000
-            maxQueue: 256
+          paths:
+            stateDb: /var/lib/edgecommons/image-processor/state.db
+            modelCache: /var/lib/edgecommons/image-processor/models
+            staging: /var/lib/edgecommons/image-processor/staging
+          runtime:
+            providers:
+            - CPUExecutionProvider
+            requiredProvider: CPUExecutionProvider
+            allowCpuOnly: true
+            executorCellsPerGpu: 1
+            loadConcurrencyPerGpu: 1
+          gpu:
+            devices: []
+            residentMemoryBudgetPercent: 80
+            reserveMiB: 512
+          scheduler:
+            maxBatchSize: 1
+            maxBatchLatencyMs: 20
+            hotTtlSecs: 120
+            minResidencySecs: 15
+            maxAttempts: 5
+            retryBackoffSecs: 2
+            maxRetryBackoffSecs: 60
+            queueAgeWarningSecs: 300
+          discovery:
+            rescanSecs: 15
+            debounceMs: 250
+          publish:
+            confirmationTimeoutSecs: 10
+            requireConfirmationBeforeCleanup: true
+            maxAttempts: 20
+            outboxCapacity: 10000
+            outboxReserveBudgetMiB: 64
+          modelSources:
+            allowedSchemes:
+            - file
+            allowedUriPrefixes: []
+            verifyTls: true
+          signing:
+            required: false
+            trustedKeys: []
+          models:
+          - id: synthetic-anomaly-scalar
+            version: 1.0.0
+            digest: sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00
+            uri: /var/lib/edgecommons/image-processor/bundles/synthetic-anomaly-scalar-1.0.0.tar
+            activation:
+              requireWarmup: true
+              retainForRollback: true
+          completionDefaults:
+            onSuccess: archive
+            onInvalidInput: quarantine
+            onOperationalFailure: retainInPlace
+            onPublishFailure: retainInPlace
+            onCollision: fail
         instances:
-        - id: rollup
-          subscribe:
-          - ecv1/+/+/+/data/#
-          publishTopic: ecv1/gw-01/image-processor/rollup/data/summary
-          target: local
-          pipeline:
-          - fieldEquals:
-              path: signal.id
-              value: temperature-1
-          - countPerTick: {}
-          tickMs: 10000
+        - id: clearance-cam-01
+          priority: 100
+          source:
+            kind: spool
+            root: /var/spool/camera-adapter/cam-01
+            include:
+            - '**/*.jpg'
+            - '**/*.jpeg'
+            - '**/*.png'
+            readiness:
+              mode: cameraSidecar
+            camera:
+              component: camera-adapter
+              instance: cam-01
+              subscribeAnnouncements: true
+              reconcileCaptureStatusSecs: 30
+          modelRef:
+            id: synthetic-anomaly-scalar
+            version: 1.0.0
+            digest: sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00
+          outputs:
+            writeResultSidecar: true
+            decisionSignals:
+            - id: line-clearance/pass
+              value: $.decision.pass
+            - id: line-clearance/confidence
+              value: $.decision.confidence
+            - id: line-clearance/status
+              value: $.status
+          completion:
+            onSuccess: archive
+            archiveDir: /var/spool/image-processor/processed/cam-01
+            failedDir: /var/spool/image-processor/failed/cam-01
+        - id: adhoc-inspect
+          priority: 50
+          source:
+            kind: trigger
+            subscribe:
+            - ecv1/+/inspection-ui/+/app/inspect/request
+            fileRoot: /var/spool/inspection
+            inlineStaging: /var/lib/edgecommons/image-processor/staging/adhoc
+          modelRef:
+            id: synthetic-anomaly-scalar
+            version: 1.0.0
+            digest: sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00
+          outputs:
+            writeResultSidecar: false
+            decisionSignals:
+            - id: adhoc/pass
+              value: $.decision.pass
+          completion:
+            onSuccess: delete
     accessControl:
       aws.greengrass.ipc.pubsub:
         com.mbreissi.edgecommons.ImageProcessor:ipc:1:

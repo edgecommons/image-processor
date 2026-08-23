@@ -752,6 +752,54 @@ class Scheduler:
             return False
         return True
 
+    # WP6 -- the `evict-model` verb (DESIGN.md §13) releases an idle session on operator
+    # request. Residency is this object's business, so the refusal rule that protects a draining
+    # burst lives here rather than in the command handler.
+    def evict(self, digest: str) -> dict:
+        """Release one resident model generation, refusing a leased one.
+
+        Args:
+            digest: The bundle digest to evict.
+
+        Returns:
+            ``{"evicted": bool, "digest": str, "cells": [...], "reason": str}``. A generation
+            still leased by a draining burst is refused rather than taken away from it.
+        """
+        with self._lock:
+            state = _Pass(now_ms=self._clock())
+            holders = []
+            for cell in self.supervisor.cells():
+                if digest not in self._resident.get(cell.cell_id, {}):
+                    continue
+                if digest in self._leases(cell):
+                    return {
+                        "evicted": False,
+                        "digest": digest,
+                        "cells": [],
+                        "reason": "the generation is leased by work that has not drained",
+                    }
+                holders.append(cell)
+            if not holders:
+                return {
+                    "evicted": False,
+                    "digest": digest,
+                    "cells": [],
+                    "reason": "the generation is not resident",
+                }
+            released = []
+            for cell in holders:
+                # Read the device before unloading, so the reclaim check that decides whether the
+                # cell is still usable has the same reading a scheduling pass would give it.
+                self._memory(cell, state)
+                if self._unload(cell, digest, state):
+                    released.append(cell.cell_id)
+            return {
+                "evicted": bool(released),
+                "digest": digest,
+                "cells": sorted(released),
+                "reason": "" if released else "the cell did not release it",
+            }
+
     def reset_lane(self, digest: str) -> None:
         """Clear a lane's blocks so a re-staged model generation is tried again.
 

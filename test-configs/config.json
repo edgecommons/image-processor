@@ -31,22 +31,131 @@
   "component": {
     "token": "image-processor",
     "global": {
-      "defaults": {
-        "tickMs": 10000,
-        "maxQueue": 256
+      "paths": {
+        "stateDb": "/var/lib/edgecommons/image-processor/state.db",
+        "modelCache": "/var/lib/edgecommons/image-processor/models",
+        "staging": "/var/lib/edgecommons/image-processor/staging"
+      },
+      "runtime": {
+        "providers": ["CPUExecutionProvider"],
+        "requiredProvider": "CPUExecutionProvider",
+        "allowCpuOnly": true,
+        "executorCellsPerGpu": 1,
+        "loadConcurrencyPerGpu": 1
+      },
+      "gpu": {
+        "devices": [],
+        "residentMemoryBudgetPercent": 80,
+        "reserveMiB": 512
+      },
+      "scheduler": {
+        "maxBatchSize": 1,
+        "maxBatchLatencyMs": 20,
+        "hotTtlSecs": 120,
+        "minResidencySecs": 15,
+        "maxAttempts": 5,
+        "retryBackoffSecs": 2,
+        "maxRetryBackoffSecs": 60,
+        "queueAgeWarningSecs": 300
+      },
+      "discovery": {
+        "rescanSecs": 15,
+        "debounceMs": 250
+      },
+      "publish": {
+        "confirmationTimeoutSecs": 10,
+        "requireConfirmationBeforeCleanup": true,
+        "maxAttempts": 20,
+        "outboxCapacity": 10000,
+        "outboxReserveBudgetMiB": 64
+      },
+      "modelSources": {
+        "allowedSchemes": ["file"],
+        "allowedUriPrefixes": [],
+        "verifyTls": true
+      },
+      "signing": {
+        "required": false,
+        "trustedKeys": []
+      },
+      "models": [
+        {
+          "id": "synthetic-anomaly-scalar",
+          "version": "1.0.0",
+          "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00",
+          "uri": "/var/lib/edgecommons/image-processor/bundles/synthetic-anomaly-scalar-1.0.0.tar",
+          "activation": {
+            "requireWarmup": true,
+            "retainForRollback": true
+          }
+        }
+      ],
+      "completionDefaults": {
+        "onSuccess": "archive",
+        "onInvalidInput": "quarantine",
+        "onOperationalFailure": "retainInPlace",
+        "onPublishFailure": "retainInPlace",
+        "onCollision": "fail"
       }
     },
     "instances": [
       {
-        "id": "rollup",
-        "subscribe": ["ecv1/+/+/+/data/#"],
-        "publishTopic": "ecv1/gw-01/image-processor/rollup/data/summary",
-        "target": "local",
-        "pipeline": [
-          { "fieldEquals": { "path": "signal.id", "value": "temperature-1" } },
-          { "countPerTick": {} }
-        ],
-        "tickMs": 10000
+        "id": "clearance-cam-01",
+        "priority": 100,
+        "source": {
+          "kind": "spool",
+          "root": "/var/spool/camera-adapter/cam-01",
+          "include": ["**/*.jpg", "**/*.jpeg", "**/*.png"],
+          "readiness": {
+            "mode": "cameraSidecar"
+          },
+          "camera": {
+            "component": "camera-adapter",
+            "instance": "cam-01",
+            "subscribeAnnouncements": true,
+            "reconcileCaptureStatusSecs": 30
+          }
+        },
+        "modelRef": {
+          "id": "synthetic-anomaly-scalar",
+          "version": "1.0.0",
+          "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00"
+        },
+        "outputs": {
+          "writeResultSidecar": true,
+          "decisionSignals": [
+            { "id": "line-clearance/pass", "value": "$.decision.pass" },
+            { "id": "line-clearance/confidence", "value": "$.decision.confidence" },
+            { "id": "line-clearance/status", "value": "$.status" }
+          ]
+        },
+        "completion": {
+          "onSuccess": "archive",
+          "archiveDir": "/var/spool/image-processor/processed/cam-01",
+          "failedDir": "/var/spool/image-processor/failed/cam-01"
+        }
+      },
+      {
+        "id": "adhoc-inspect",
+        "priority": 50,
+        "source": {
+          "kind": "trigger",
+          "subscribe": ["ecv1/+/inspection-ui/+/app/inspect/request"],
+          "fileRoot": "/var/spool/inspection",
+          "inlineStaging": "/var/lib/edgecommons/image-processor/staging/adhoc"
+        },
+        "modelRef": {
+          "id": "synthetic-anomaly-scalar",
+          "version": "1.0.0",
+          "digest": "sha256:7dfefce8aed303b4e2b6b17206ee61cd14d06883707b0bd37d4584d3c3a28f00"
+        },
+        "outputs": {
+          "writeResultSidecar": false,
+          "decisionSignals": [{ "id": "adhoc/pass", "value": "$.decision.pass" }]
+        },
+        "completion": {
+          "onSuccess": "delete"
+        }
       }
     ]
   }
