@@ -80,7 +80,10 @@ def test_installing_writes_a_temporary_file_flushes_and_renames(tmp_path, monkey
 
     installed = write_sidecar(target, _document())
 
-    assert order == ["flush", "install"]
+    # The file is flushed, then installed; on platforms that can fsync a directory the containing
+    # directory is flushed after the install (a third entry), on Windows that step is a no-op.
+    assert order[:2] == ["flush", "install"]
+    assert order[2:] in ([], ["flush"])
     assert installed.path == target
     assert installed.bytes == target.stat().st_size
     assert installed.sha256 == hashlib.sha256(target.read_bytes()).hexdigest()
