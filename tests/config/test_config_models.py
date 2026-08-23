@@ -8,6 +8,7 @@ from image_processor.config import (
     MAX_INLINE_BYTES,
     CollisionPolicy,
     ConfigError,
+    PublishFailureAction,
     ReadinessMode,
     SpoolSourceConfig,
     TriggerSourceConfig,
@@ -42,7 +43,6 @@ def test_an_empty_configuration_takes_every_default():
     assert config.scheduler.hot_ttl_secs == 120
     assert config.scheduler.max_attempts == 5
     assert config.publish.confirmation_timeout_secs == 10
-    assert config.publish.require_confirmation_before_cleanup is True
     assert config.signing.required is False
     assert config.model_sources.allowed_schemes == ("s3", "https", "file")
     assert config.model_sources.verify_tls is True
@@ -57,6 +57,7 @@ def test_the_default_completion_policy_matches_the_schema(config_schema):
     assert documented["onInvalidInput"]["default"] == "quarantine"
     assert documented["onOperationalFailure"]["default"] == "retainInPlace"
     assert documented["onPublishFailure"]["default"] == "retainInPlace"
+    assert documented["onPublishFailure"]["$ref"] == "#/$defs/publishFailureAction"
     assert defaults.on_success is CompletionAction.ARCHIVE
     assert defaults.on_invalid_input is CompletionAction.QUARANTINE
     assert defaults.on_operational_failure is CompletionAction.RETAIN
@@ -91,7 +92,6 @@ SCHEMA_DEFAULT_BLOCKS = {
     },
     "publish": {
         "confirmationTimeoutSecs": "confirmation_timeout_secs",
-        "requireConfirmationBeforeCleanup": "require_confirmation_before_cleanup",
         "maxAttempts": "max_attempts",
         "outboxCapacity": "outbox_capacity",
         "outboxReserveBudgetMiB": "outbox_reserve_budget_mib",
@@ -467,3 +467,32 @@ def test_a_route_may_lower_its_inline_ceiling(global_config, trigger_route):
 def test_a_non_string_where_a_string_belongs_is_refused(global_config):
     global_config["models"][0]["id"] = 7
     assert raises(global_config, []) == "INVALID_TYPE"
+
+
+def test_publish_carries_no_confirmation_switch(global_config):
+    """Confirmation always gates cleanup, so there is no key to turn it off (D-IP-20)."""
+    global_config["publish"] = {"requireConfirmationBeforeCleanup": False}
+    assert raises(global_config, []) == "UNKNOWN_KEY"
+    assert not hasattr(parse().publish, "require_confirmation_before_cleanup")
+
+
+@pytest.mark.parametrize("action", ["archive", "delete", "quarantine"])
+def test_a_mutating_publish_failure_action_is_refused(global_config, spool_route, action):
+    """A publish failure keeps the input, so no value that moves it is accepted (D-IP-20)."""
+    global_config["completionDefaults"] = {"onPublishFailure": action}
+    assert raises(global_config, [spool_route]) == "ON_PUBLISH_FAILURE_NOT_SUPPORTED"
+
+    global_config.pop("completionDefaults")
+    spool_route["completion"]["onPublishFailure"] = action
+    assert raises(global_config, [spool_route]) == "ON_PUBLISH_FAILURE_NOT_SUPPORTED"
+
+
+def test_the_one_publish_failure_action_is_accepted_wherever_it_is_written(
+    global_config, spool_route
+):
+    global_config["completionDefaults"] = {"onPublishFailure": "retainInPlace"}
+    spool_route["completion"]["onPublishFailure"] = "retainInPlace"
+    config = parse(global_config, [spool_route])
+    assert config.completion_defaults.on_publish_failure is CompletionAction.RETAIN
+    assert config.routes[0].completion.on_publish_failure is CompletionAction.RETAIN
+    assert str(PublishFailureAction.RETAIN_IN_PLACE) == "retainInPlace"

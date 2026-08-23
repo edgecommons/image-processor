@@ -187,11 +187,6 @@
           "default": 10,
           "description": "How long one publish attempt waits for a PUBACK at QoS 1, or for the Greengrass IPC publish operation to complete, before it counts as a failed attempt. The stored bytes are retried unchanged."
         },
-        "requireConfirmationBeforeCleanup": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whether archive, delete, and quarantine wait for transport confirmation. Turning it off lets the component reclaim disk during a long broker outage at the cost of the evidence guarantee, so a regulated deployment leaves it on."
-        },
         "maxAttempts": {
           "type": "integer",
           "minimum": 1,
@@ -291,7 +286,7 @@
           "description": "What happens when inference exhausts its retry budget. The input is intact, so retaining it keeps a later reprocess possible."
         },
         "onPublishFailure": {
-          "$ref": "#/$defs/completionAction",
+          "$ref": "#/$defs/publishFailureAction",
           "default": "retainInPlace",
           "description": "What happens when publication exhausts its attempts. The result is already committed and the outbox row is kept, so the input is retained until an operator runs `retry-publication`."
         },
@@ -581,7 +576,7 @@
         "onSuccess": { "$ref": "#/$defs/completionAction" },
         "onInvalidInput": { "$ref": "#/$defs/completionAction" },
         "onOperationalFailure": { "$ref": "#/$defs/completionAction" },
-        "onPublishFailure": { "$ref": "#/$defs/completionAction" },
+        "onPublishFailure": { "$ref": "#/$defs/publishFailureAction" },
         "onCollision": { "$ref": "#/$defs/collisionPolicy" },
         "archiveDir": {
           "$ref": "#/$defs/absolutePath",
@@ -599,6 +594,12 @@
       "title": "Completion action",
       "enum": ["archive", "delete", "retainInPlace", "quarantine"],
       "description": "What happens to the input file and its companions. `archive`: move them to `archiveDir`. `delete`: remove them. `retainInPlace`: leave them where they are and record the outcome in the ledger. `quarantine`: move them to `failedDir`, or leave them in place when no `failedDir` is set."
+    },
+    "publishFailureAction": {
+      "title": "Publish-failure completion action",
+      "const": "retainInPlace",
+      "description": "What happens when publication exhausts its attempts. `retainInPlace` is the only value: the result is already committed and its outbox row is kept, so the input stays where it is until an operator runs `retry-publication` (D-IP-20). The key stays configurable so a regulated profile can state the behavior rather than inherit it.",
+      "examples": ["retainInPlace"]
     },
     "collisionPolicy": {
       "title": "Collision policy",

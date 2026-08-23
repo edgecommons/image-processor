@@ -249,6 +249,14 @@ from the exception and its message:
 | `permanent` | Every attempt fails the same way: an unreadable image, a head no task family serves, a provider policy this machine cannot satisfy. | The job goes to `PROCESSING_EXHAUSTED`; a model that cannot load sends every job pinned to it to `BLOCKED_CONFIGURATION`. |
 | `contaminating` | The CUDA context is no longer trustworthy: an illegal address, a failed launch, a destroyed context, an ECC fault. | The cell is recycled and the job runs again at the same attempt. |
 
+A permanent failure ends the job, but it does not say what happens to the image. That is decided by
+the failure code. An unreadable or corrupt image, an input digest that does not match its readiness
+evidence, an input over the byte bound, and an input that is no longer there are all failures of the
+evidence itself, so the route's `onInvalidInput` action applies and the file may be quarantined.
+A head no task family serves, a provider policy this machine cannot satisfy, a bundle that does not
+load — none of those say anything about the image, so `onOperationalFailure` applies, the file stays
+where it is, and the event that names the failure asks an operator to repair the deployment.
+
 An out-of-memory is also a measurement. The residency policy records it and asks for more headroom
 the next time that model loads, so a retry is not the identical request that just failed.
 

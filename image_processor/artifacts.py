@@ -29,7 +29,7 @@ from typing import Any, Callable, Iterable, Mapping, Optional
 
 from image_processor.bundles import BundleError, stage_bundle
 from image_processor.engine.families import FamilyError, family_for
-from image_processor.engine.protocol import LoadFailed, Loaded, LoadModel
+from image_processor.engine.protocol import LoadFailed, Loaded, LoadModel, Unload
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,14 @@ class GenerationState:
         digest: The bundle digest.
         staged: Whether a verified bundle is in the cache.
         warmed: Whether golden warmup succeeded on this device.
+        warmup_samples: Golden samples the warmup compared. ``0`` means the bundle carries none
+            and the session was primed instead.
+        load_ms: Wall-clock milliseconds the warmup load took, measured on this device. It is the
+            reload cost the residency policy prices an eviction against, and the number
+            ``get-models`` reports.
+        device_mib: Device memory the warmup load consumed, measured across it, or ``0`` when no
+            device probe is available. It is what admission budgets against before the scheduler
+            loads this generation for real.
         error: The last failure, or ``None``.
         failed_at: When that failure happened, on the monotonic clock.
         routes: The routes that want this generation.
@@ -83,6 +91,9 @@ class GenerationState:
     digest: str
     staged: bool = False
     warmed: bool = False
+    warmup_samples: int = 0
+    load_ms: float = 0.0
+    device_mib: int = 0
     error: Optional[str] = None
     failed_at: float = 0.0
     routes: tuple = ()
@@ -223,12 +234,23 @@ class ArtifactManager:
         logger.info("staged %s %s (%s)", entry.id, entry.version, entry.digest)
         return cached
 
-    def warm(self, entry: Any, bundle: Any) -> None:
+    def warm(self, entry: Any, bundle: Any) -> Loaded:
         """Run golden warmup on the target provider (DESIGN.md 9 step 5).
+
+        The session is released again as soon as it has proved itself. Activation asks whether
+        this bundle loads and reproduces its goldens on this device; it does not ask for a
+        resident session, and the scheduler is the only component that decides what stays on the
+        GPU. A session left behind here would hold device memory the scheduler's residency map
+        knows nothing about, so every later admission would budget against a number that is
+        already wrong (DESIGN.md 10.2). The measurements survive the unload: what the load cost
+        and what it occupied are carried back to the caller.
 
         Args:
             entry: The model entry being activated.
             bundle: The staged :class:`~image_processor.types.CachedBundle`.
+
+        Returns:
+            The :class:`~image_processor.engine.protocol.Loaded` reply the warmup produced.
 
         Raises:
             ArtifactError: No executor can warm it, or the warmup failed.
@@ -267,7 +289,8 @@ class ArtifactManager:
                     reply.warmup_samples,
                     ",".join(reply.providers_assigned),
                 )
-                return
+                self._release(cell, entry, bundle.digest)
+                return reply
             if isinstance(reply, LoadFailed):
                 last = f"{reply.code or 'LOAD_FAILED'}: {reply.error}"
                 if reply.error_class == "permanent":
@@ -275,6 +298,27 @@ class ArtifactManager:
                 continue
             last = f"UNEXPECTED_REPLY: {type(reply).__name__}"
         raise ArtifactError("WARMUP_FAILED", last or "no executor accepted the model")
+
+    def _release(self, cell: Any, entry: Any, digest: str) -> None:
+        """Give back the session a warmup built, on the cell that built it.
+
+        A failed unload is logged rather than raised: the bundle has already proved that it
+        loads, which is what activation asked, and a session the cell could not release is the
+        supervisor's recycle path to deal with (DESIGN.md 10.4).
+
+        Args:
+            cell: The cell that answered the warmup.
+            entry: The model entry being activated, for the message.
+            digest: The bundle digest to release.
+        """
+        try:
+            self.supervisor.call(cell, Unload(digest), self.warmup_timeout_s)
+        except Exception as exc:  # noqa: BLE001 - the warmup answered; the unload is hygiene
+            logger.warning(
+                "cell %s could not release %s after its warmup: %s", cell.cell_id, entry.id, exc
+            )
+            return
+        logger.debug("released %s on %s after its warmup", entry.id, cell.cell_id)
 
     # -- activation --------------------------------------------------------------------
 
@@ -324,8 +368,11 @@ class ArtifactManager:
             bundle = self.stage(entry)
             state.staged = True
             if entry.activation.require_warmup:
-                self.warm(entry, bundle)
+                reply = self.warm(entry, bundle)
                 state.warmed = True
+                state.warmup_samples = int(reply.warmup_samples)
+                state.load_ms = float(reply.load_ms)
+                state.device_mib = int(reply.device_mib)
         except ArtifactError as exc:
             state.error = f"{exc.code}: {exc.message}"
             state.failed_at = self._clock()
@@ -453,6 +500,9 @@ class ArtifactManager:
                     "uri": entry.uri,
                     "staged": bool(self.cache.get(entry.digest, verify=False)),
                     "warmed": bool(state.warmed) if state else False,
+                    "warmupSamples": int(state.warmup_samples) if state else 0,
+                    "loadMs": round(state.load_ms, 3) if state else 0.0,
+                    "deviceMiB": int(state.device_mib) if state else 0,
                     "activeRoutes": sorted(active.get(entry.digest, ())),
                     "stagingRoutes": sorted(staging.get(entry.digest, ())),
                     "rollback": entry.digest in rollbacks,

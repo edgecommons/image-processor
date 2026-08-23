@@ -139,6 +139,87 @@ def test_an_undecodable_image_fails_holds_and_is_quarantined(running, gg, home):
     assert len(jobs) == 1
 
 
+def _exhausted_job(running, home, corpus, name: str):
+    """Admit one good capture and drive it to `PROCESSING_EXHAUSTED` without running it.
+
+    The completion under test is the one a terminal failure takes, and what that failure was is
+    the only variable. So the input is a real, decodable image the route would otherwise have
+    archived: whatever happens to it, the pixels are not the reason.
+    """
+    write_capture(home / "spool", name, corpus.image("anomaly-good.png"))
+    running._source_of("clearance-cam-01").rescan()
+    jobs, _cursor = running._ledger.by_state([JobState.READY], None, None, 5)
+    assert len(jobs) == 1
+    job = jobs[0]
+    for before, after in (
+        (JobState.READY, JobState.CLAIMED),
+        (JobState.CLAIMED, JobState.WAITING_MODEL),
+        (JobState.WAITING_MODEL, JobState.INFERENCING),
+        (JobState.INFERENCING, JobState.PROCESSING_EXHAUSTED),
+    ):
+        job = running._ledger.transition(job.inference_id, before, after)
+    return job
+
+
+def _failure(job, code: str, detail: str):
+    """Build the `FAILED` answer a cell hands back for one permanent failure."""
+    from image_processor.types import InferenceResult, Timings
+
+    return InferenceResult(
+        inference_id=job.inference_id,
+        status="FAILED",
+        normalized=None,
+        decision=None,
+        providers=[],
+        gpu_device=None,
+        gpu_class=None,
+        timings=Timings(
+            queue_ms=1.0,
+            model_load_ms=0.0,
+            preprocess_ms=0.0,
+            inference_ms=0.0,
+            postprocess_ms=0.0,
+            total_ms=1.0,
+        ),
+        memory_high_water_mib=None,
+        error=f"{code}: {detail}",
+        error_class="permanent",
+    )
+
+
+def test_a_permanent_input_failure_takes_the_invalid_input_action(running, gg, home, corpus):
+    """A digest that does not match the readiness evidence is bad evidence, so it quarantines."""
+    job = _exhausted_job(running, home, corpus, "mismatched.png")
+    route = running._config.route("clearance-cam-01")
+
+    running._fail(job, route, _failure(job, "INPUT_DIGEST_MISMATCH", "the staged file hashes to b0"))
+
+    assert (home / "failed" / "mismatched.png").is_file()
+    assert not (home / "spool" / "mismatched.png").exists()
+    assert gg.find_event("inference-failed") is not None
+    jobs, _cursor = running._ledger.by_state([JobState.RETAINED_FAILED], None, None, 5)
+    assert [entry.inference_id for entry in jobs] == [job.inference_id]
+
+
+def test_a_permanent_deployment_failure_retains_the_input_and_raises_an_event(
+    running, gg, home, corpus
+):
+    """A manifest whose shape the graph refuses says nothing about the image (DESIGN.md 15.2)."""
+    job = _exhausted_job(running, home, corpus, "good.png")
+    route = running._config.route("clearance-cam-01")
+
+    running._fail(
+        job, route, _failure(job, "SHAPE_MISMATCH", "got invalid dimensions for input images")
+    )
+
+    assert (home / "spool" / "good.png").is_file(), "the evidence stays where the camera put it"
+    assert not (home / "failed" / "good.png").exists()
+    event = gg.find_event("inference-failed")
+    assert event is not None and "SHAPE_MISMATCH" in json.dumps(event)
+    jobs, _cursor = running._ledger.by_state([JobState.RETAINED_FAILED], None, None, 5)
+    assert [entry.inference_id for entry in jobs] == [job.inference_id]
+
+
 def test_a_failed_trigger_job_still_answers_the_requester(running, gg, home):
     from edgecommons.messaging.message import Message, MessageHeader
 

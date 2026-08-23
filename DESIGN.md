@@ -49,6 +49,7 @@ decision rests on, checked on 2026-08-22.
 | D-IP-17 | **Test corpus in four tiers** (§16): synthetic known-answer ONNX graphs and generated images in CI; permissively licensed real models (MobileNetV2, ResNet-50, YOLOX-Nano/S, SSD-MobileNetV1, FCN-ResNet50, anomalib PatchCore on VisA `capsules`) with Imagenette, a COCO val2017 slice, and VisA; a synthesized multi-bundle corpus for residency tests; camera-sim E2E. YOLOv8/YOLO11 (AGPL-3.0) and MVTec AD (CC BY-NC) are excluded. | Known answers make the CI suite deterministic and network-free; the real-model tier proves decode/pre/post chains; residency needs more bundles than fit in 8 GB, which real models cannot supply. License terms must be compatible with a BUSL product even for test use. |
 | D-IP-18 | **camera-adapter's `sim` backend gains a `playlist` pattern** that replays a directory of real images as captures with genuine sidecars and announcements. | The sim's synthetic patterns prove plumbing only; a true line-clearance E2E in the Dallas harness needs real imagery through the real camera path. Reusable by any future vision component. |
 | D-IP-19 | **The real-model tier runs nightly and on demand**, not per PR; golden results are committed as small JSON files; images and models are never committed (pinned-URL + SHA-256 asset manifest, cached under `tests/.cache/`). | Keeps per-PR CI fast and repository size bounded while still asserting parity against real models. |
+| D-IP-20 | **`publish.requireConfirmationBeforeCleanup` and mutating `onPublishFailure` values are removed:** confirmation always gates cleanup and a publish failure always retains the input; an operator re-drives with `retry-publication`. | Neither knob could take effect. Cleanup runs only out of `PUBLISHED` (D-IP-6), so nothing archives, deletes, or quarantines without transport confirmation; and §7 gives `PUBLISH_EXHAUSTED` no edge to cleanup, so a mutating publish-failure action would move evidence out from under a publication that is still expected to happen. `onPublishFailure` keeps its key, restricted to `retainInPlace`, so a regulated profile states the behavior rather than inheriting it. |
 
 Residual facts verified on 2026-08-22 that shape the design: the Python core exposes candidate
 validators (validate-then-apply, reject-and-keep) and a post-apply listener but no prepared
@@ -335,7 +336,10 @@ Configuration names the desired model set; the component makes it active (D-IP-9
 3. Verify the tarball digest, then the signature when required, then extract with path, count,
    size, and ratio limits, then verify per-file digests and the manifest schema.
 4. Validate provider compatibility and task-family support; refuse otherwise.
-5. Run golden warmup on the target provider.
+5. Run golden warmup on the target provider, then release the session again. Warmup answers
+   whether this bundle loads and reproduces its goldens on this device; residency is the
+   scheduler's, and a session held here would occupy device memory its map does not account for
+   (§10.2). What the load cost and what it occupied are kept and feed `get-models` and admission.
 6. Atomically promote the bundle into the content-addressed cache and mark it `STAGED`.
 7. Switch the route's active generation atomically; in-flight jobs keep their pinned generation;
    the last-known-good bundle is retained for rollback.
@@ -368,6 +372,10 @@ Cache tiers: resident GPU sessions (L0), host page cache of memory-mapped model 
 local content-addressed bundle cache (L2), the remote source (L3). Residency is keyed by model
 digest plus provider/options, precision, shape profile, and GPU class, not by route; routes bound to
 the same generation share one session.
+
+The scheduler owns residency: it is the only component that makes a session resident, and every
+resident session is in its map. Activation warms and releases (§9 step 5), so the first job on a
+newly activated generation pays for its load.
 
 GPU admission uses the manifest estimate, previously measured load peak and steady-state delta
 (NVML), current device free memory, a runtime safety reserve, the expected activation peak, and a
@@ -414,7 +422,7 @@ Illustrative; `config.schema.json` is the contract.
       "gpu": { "devices": ["0"], "residentMemoryBudgetPercent": 80, "reserveMiB": 2048 },
       "scheduler": { "maxBatchLatencyMs": 20, "hotTtlSecs": 120, "minResidencySecs": 15 },
       "discovery": { "rescanSecs": 60, "debounceMs": 500 },
-      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true, "outboxReserveBudgetMiB": 256 },
+      "publish": { "confirmationTimeoutSecs": 10, "outboxReserveBudgetMiB": 256 },
       "modelSources": { "allowedSchemes": ["s3"], "allowedUriPrefixes": ["s3://approved-models/"], "verifyTls": true },
       "signing": {
         "required": true,
@@ -481,10 +489,18 @@ is how long notifications must stop before a nudged walk runs. `publish.outboxRe
 the admission reservation budget in bytes — the capacity §7 requires a job to hold before it is
 admitted — while `publish.outboxCapacity` bounds the number of pending rows.
 
-Completion actions are spelled `archive | delete | retainInPlace | quarantine`, and
-`onCollision` is `fail` or `suffix`: `fail` records `CLEANUP_FAILED` and leaves both objects
+Completion actions are spelled `archive | delete | retainInPlace | quarantine`, except
+`onPublishFailure`, which takes `retainInPlace` alone (D-IP-20). `onCollision` is `fail` or
+`suffix`: `fail` records `CLEANUP_FAILED` and leaves both objects
 intact, `suffix` installs the input beside the occupant under a deterministic digest-derived name.
 Neither overwrites the object already there. A route with no `failedDir` quarantines in place.
+
+Which failure took which action is decided by the failure code, not by the error class. Only an
+invalid or corrupt input takes `onInvalidInput`: the decode codes, an input digest that does not
+match the readiness evidence, an input over the byte bound, and an input that is not there. Model,
+bundle, configuration, provider, GPU, runtime, postprocess-schema, and publish failures take
+`onOperationalFailure` and raise the `evt` that asks an operator to repair the deployment; they
+never quarantine otherwise-good evidence.
 
 Validation is fail-closed: unknown fields, duplicate ids, unresolved model references, overlapping
 mutating roots, missing completion directories, provider policy, path containment, trigger roots,
@@ -596,7 +612,7 @@ unverified inference is `HOLD`.
 
 | Tier | Runs | Models | Images | Proves |
 |---|---|---|---|---|
-| 1 — CI suite | every PR, `CPUExecutionProvider`, no network, 90% line coverage | Synthetic ONNX graphs generated in-test with `onnx.helper`, fixed weights, one per task family: classification (conv → global pool → FC, class = dominant quadrant color), detection (fixed overlapping box set for decode + NMS), segmentation (threshold mask with derivable pixel counts), anomaly (mean-abs-diff against a baked reference). Deliberately bad bundles: unsupported head, wrong signature, tampered digest, oversized archive, path-traversal member, static vs dynamic batch axis. | Generated with Pillow/numpy: quadrant, gradient, and solid images with computable expected outputs; corrupt, truncated, zero-byte, decompression-bomb, wrong-extension, and 16-bit TIFF fixtures; camera-shaped fixtures (JPEG + `<image>.json` in the `ImageCaptured` body shape, written sidecar-first). Built by `tests/fixtures/build.py`; nothing binary is committed. | Task families, decision rules, lifecycle and kill-points, readiness modes, trigger path (inline ≤ 64 KiB and file reference), signing, outbox/confirm, completion and recovery. |
+| 1 — CI suite | every PR, `CPUExecutionProvider`, no network, 90% line coverage | Synthetic ONNX graphs generated in-test with `onnx.helper`, fixed weights, one per task family: classification (conv → global pool → FC, class = dominant quadrant color), detection (fixed overlapping box set for decode + NMS), segmentation (threshold mask with derivable pixel counts), anomaly (mean-abs-diff against a baked reference). Every synthetic bundle also carries one golden warmup sample -- the raw preprocessed tensor of a known-answer image and the raw session outputs for it -- so the warmup gate runs on every load. Deliberately bad bundles: unsupported head, wrong signature, tampered digest, oversized archive, path-traversal member, static vs dynamic batch axis, golden answer that no longer reproduces. | Generated with Pillow/numpy: quadrant, gradient, and solid images with computable expected outputs; corrupt, truncated, zero-byte, decompression-bomb, wrong-extension, and 16-bit TIFF fixtures; camera-shaped fixtures (JPEG + `<image>.json` in the `ImageCaptured` body shape, written sidecar-first). Built by `tests/fixtures/build.py`; nothing binary is committed. | Task families, decision rules, golden warmup, lifecycle and kill-points, readiness modes, trigger path (inline ≤ 64 KiB and file reference), signing, outbox/confirm, completion and recovery. |
 | 2 — real models | nightly and on demand (`EC_LIVE_MODELS=1`); CPU in CI, GPU on lab | MobileNetV2 and ResNet-50 (ONNX Model Zoo, Apache-2.0); YOLOX-Nano/S (Apache-2.0) and SSD-MobileNetV1 (MIT); FCN-ResNet50 (ONNX Model Zoo, MIT); anomalib PatchCore (Apache-2.0) trained on VisA `capsules`. Packed into signed bundles by `tools/make-bundle.py`. | Imagenette (Apache-2.0); a ~200-image COCO val2017 slice (annotations CC BY 4.0, images test-only and uncommitted); VisA `capsules` good/bad splits (CC BY 4.0). Pinned by `tests/assets.json` (URL + SHA-256), cached under `tests/.cache/`. | Real decode/preprocess/postprocess chains; provider-assignment recording; CPU↔CUDA parity within tolerance against committed JSON goldens (top-k labels, box IoU ≥ 0.9, anomaly AUROC threshold). |
 | 3 — residency and burst | GPU lab (RTX 5080 16 GB, RTX 2080 Super 8 GB), release gate (`EC_NVIDIA=1`) | Synthesized corpus: N distinct bundles from the MobileNetV2 and YOLOX-S architectures with perturbed weights and a padded initializer sizing them to ≈ 50 MB / 200 MB / 600 MB / 1.5 GB (for example 40 bundles, ≈ 20 GB against an 8 GB card). | Tier-2 corpora replayed at rate by the spool-writer fixture in camera format. | Cold load, warm inference, eviction, reload, recycle count, zero OOM, p50/p95/p99 queue and inference latency under uniform, Zipf-skewed, synchronized-burst, and scheduled-prefetch arrivals. These measurements set the Phase 0 SLOs. |
 | 4 — E2E | HOST (local EMQX + Docker), GREENGRASS on `lab-5950x` over real IPC, KUBERNETES (kind runner VM or lab k3s), Dallas harness | Per-camera line-clearance bundles: the VisA-capsules PatchCore anomaly model and a synthetic line-clearance classifier trained on procedurally rendered tray/conveyor scenes with and without foreign objects; each camera instance binds a distinct digest. | camera-adapter `sim` with the `playlist` pattern (D-IP-18) replaying VisA and the rendered scenes through the real camera path (sidecars, announcements). | Process-first topology end to end: readiness, hints, confirmed publish, archive/quarantine, evidence files, file-replicator replication, uns-bridge relay, edge-console; Greengrass and Kubernetes NVIDIA deployment. |

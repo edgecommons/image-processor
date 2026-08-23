@@ -8,7 +8,7 @@ the parent EdgeCommons workspace's `AGENTS.md`; what follows is scoped to this r
 
 ## Design documents
 
-- `DESIGN.md` — the design-fidelity contract: identity, decision register **D-IP-1…19**, input
+- `DESIGN.md` — the design-fidelity contract: identity, decision register **D-IP-1…20**, input
   sources, topology, architecture, job lifecycle, bundle contract, model delivery, NVIDIA
   execution, configuration, message contracts, commands, validation tiers, phases.
 - `LLD.md` — the module structure and the interfaces between packages, plus the work-package

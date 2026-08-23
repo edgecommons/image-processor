@@ -32,6 +32,7 @@ __all__ = [
     "OutputsConfig",
     "Paths",
     "PublishConfig",
+    "PublishFailureAction",
     "ReadinessConfig",
     "ReadinessMode",
     "RouteConfig",
@@ -112,6 +113,21 @@ class CollisionPolicy(str, Enum):
     __str__ = str.__str__
 
 
+class PublishFailureAction(str, Enum):
+    """What a route does with its input when publication exhausts its attempts.
+
+    The enum has one member because only one behavior is reachable (D-IP-20). A publish failure
+    leaves the result committed and its outbox row pending, so the input has to stay where it is
+    until an operator re-drives the publication with ``retry-publication``; moving or removing it
+    would take the evidence out from under a publication that is still expected to happen. The
+    key stays configurable so a regulated profile can state the behavior rather than inherit it.
+    """
+
+    RETAIN_IN_PLACE = "retainInPlace"
+
+    __str__ = str.__str__
+
+
 #: The configured spelling of each completion action, as `config.schema.json` writes it.
 COMPLETION_ACTION_NAMES = {
     "archive": CompletionAction.ARCHIVE,
@@ -122,6 +138,9 @@ COMPLETION_ACTION_NAMES = {
 
 #: The configured spellings of the collision policies.
 _COLLISION_POLICIES = tuple(item.value for item in CollisionPolicy)
+
+#: The configured spellings a publish failure accepts. There is exactly one (D-IP-20).
+_PUBLISH_FAILURE_ACTIONS = tuple(item.value for item in PublishFailureAction)
 
 #: The actions that move or remove the input, and therefore claim ownership of its root.
 MUTATING_ACTIONS = frozenset(
@@ -305,6 +324,36 @@ def _completion_action(node: dict, key: str, where: str, *, default: Any) -> Com
     return COMPLETION_ACTION_NAMES[name]
 
 
+def _publish_failure_action(node: dict, key: str, where: str) -> CompletionAction:
+    """Return the publish-failure completion, refusing any value that cannot take effect.
+
+    Args:
+        node: The completion block being parsed.
+        key: The key to read, always ``onPublishFailure``.
+        where: A dotted path used in the diagnostic.
+
+    Returns:
+        :data:`~image_processor.types.CompletionAction.RETAIN`, whether the key was written out
+        or left to its default.
+
+    Raises:
+        ConfigError: ``ON_PUBLISH_FAILURE_NOT_SUPPORTED`` when the value is anything but
+            ``retainInPlace``. The ledger has no cleanup edge out of ``PUBLISH_EXHAUSTED``, so a
+            mutating value would be configuration the component silently ignores (D-IP-20).
+    """
+    value = node.get(key)
+    if value is None:
+        return CompletionAction.RETAIN
+    if value not in _PUBLISH_FAILURE_ACTIONS:
+        raise ConfigError(
+            "ON_PUBLISH_FAILURE_NOT_SUPPORTED",
+            f"{where}.{key} is {value!r}; only "
+            f"{PublishFailureAction.RETAIN_IN_PLACE.value!r} takes effect, because a publish "
+            "failure keeps the result and its outbox row and waits for retry-publication",
+        )
+    return CompletionAction.RETAIN
+
+
 @dataclass(frozen=True)
 class Paths:
     """Where the component keeps the state it owns."""
@@ -353,7 +402,6 @@ class PublishConfig:
     """Confirmed publication of the cleanup-gating result."""
 
     confirmation_timeout_secs: float
-    require_confirmation_before_cleanup: bool
     max_attempts: int
     outbox_capacity: int
     outbox_reserve_budget_mib: int
@@ -452,6 +500,7 @@ class CompletionPolicy:
     on_success: CompletionAction
     on_invalid_input: CompletionAction
     on_operational_failure: CompletionAction
+    #: Always ``RETAIN``: the only publish-failure completion that takes effect (D-IP-20).
     on_publish_failure: CompletionAction
     on_collision: CollisionPolicy
     source_root: Optional[Path] = None
@@ -799,15 +848,11 @@ def _parse_publish(global_cfg: dict) -> PublishConfig:
     where = "global.publish"
     node = _child(
         global_cfg, "publish", "global",
-        ("confirmationTimeoutSecs", "requireConfirmationBeforeCleanup", "maxAttempts",
-         "outboxCapacity", "outboxReserveBudgetMiB"),
+        ("confirmationTimeoutSecs", "maxAttempts", "outboxCapacity", "outboxReserveBudgetMiB"),
     )
     return PublishConfig(
         confirmation_timeout_secs=_number(
             node, "confirmationTimeoutSecs", where, default=10.0, minimum=0
-        ),
-        require_confirmation_before_cleanup=_bool(
-            node, "requireConfirmationBeforeCleanup", where, default=True
         ),
         max_attempts=_number(node, "maxAttempts", where, default=100, integer=True, minimum=1),
         outbox_capacity=_number(
@@ -943,9 +988,7 @@ def _parse_completion_defaults(global_cfg: dict) -> CompletionPolicy:
         on_operational_failure=_completion_action(
             node, "onOperationalFailure", where, default=CompletionAction.RETAIN
         ),
-        on_publish_failure=_completion_action(
-            node, "onPublishFailure", where, default=CompletionAction.RETAIN
-        ),
+        on_publish_failure=_publish_failure_action(node, "onPublishFailure", where),
         on_collision=collision,
     )
 
@@ -972,9 +1015,7 @@ def _parse_completion(node: dict, where: str, defaults: CompletionPolicy) -> Com
         on_operational_failure=_completion_action(
             block, "onOperationalFailure", place, default=defaults.on_operational_failure
         ),
-        on_publish_failure=_completion_action(
-            block, "onPublishFailure", place, default=defaults.on_publish_failure
-        ),
+        on_publish_failure=_publish_failure_action(block, "onPublishFailure", place),
         on_collision=collision,
         archive_dir=_path(block, "archiveDir", place, default=None),
         failed_dir=_path(block, "failedDir", place, default=None),

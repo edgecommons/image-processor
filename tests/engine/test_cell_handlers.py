@@ -164,7 +164,7 @@ def test_every_synthetic_bundle_loads_and_answers_as_the_oracle_says(cell, corpu
         assert isinstance(reply, Loaded), getattr(reply, "error", "")
         assert reply.providers_assigned == (CPU_PROVIDER,)
         assert reply.load_ms > 0
-        assert reply.warmup_samples == 0
+        assert reply.warmup_samples == 1
         for case in bundle["cases"]:
             where = f"{key}:{case['image']}"
             result = infer(cell, corpus, key, case["image"])
@@ -203,6 +203,54 @@ def test_a_failed_inference_never_carries_a_decision(cell, corpus):
     assert result.decision is None and result.normalized is None
     assert result.error_class == PERMANENT
     assert "INPUT_DIGEST_MISMATCH" in result.error
+
+
+@pytest.mark.parametrize(
+    "bundle_key",
+    [
+        "synthetic-classification-1.0.0",
+        "synthetic-detection-grid-1.0.0",
+        "synthetic-detection-decoded-1.0.0",
+        "synthetic-segmentation-threshold-1.0.0",
+        "synthetic-segmentation-argmax-1.0.0",
+        "synthetic-anomaly-scalar-1.0.0",
+        "synthetic-anomaly-map-1.0.0",
+    ],
+)
+def test_a_corpus_golden_that_no_longer_reproduces_refuses_its_bundle(
+    cell, corpus, tmp_path, bundle_key
+):
+    """The corpus goldens are a live gate: move one answer and the bundle stops loading."""
+    import shutil
+
+    source = corpus.path(corpus.expected["bundles"][bundle_key]["path"])
+    root = tmp_path / "tampered"
+    shutil.copytree(source, root)
+
+    expected = json.loads((root / "warmup" / "expected-01.json").read_text(encoding="utf-8"))
+    for entry in expected.values():
+        entry["values"] = [value + 1.0 for value in entry["values"]]
+    payload = json.dumps(expected).encode("utf-8")
+    (root / "warmup" / "expected-01.json").write_bytes(payload)
+
+    document = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    document["files"]["warmup/expected-01.json"] = hashlib.sha256(payload).hexdigest()
+    (root / "manifest.json").write_text(json.dumps(document, indent=2), encoding="utf-8")
+
+    reply = handle_load(
+        cell,
+        LoadModel(
+            digest=digest_of(bundle_key),
+            bundle_root=str(root),
+            providers=(CPU_PROVIDER,),
+            allow_cpu_only=True,
+        ),
+    )
+
+    assert isinstance(reply, LoadFailed), getattr(reply, "warmup_samples", None)
+    assert reply.code == "WARMUP_MISMATCH"
+    assert reply.error_class == PERMANENT
+    assert digest_of(bundle_key) not in cell.sessions
 
 
 def build_warmup_bundle(tmp_path: Path, corpus, bundle_key: str, perturb: float = 0.0) -> Path:
@@ -246,7 +294,7 @@ def build_warmup_bundle(tmp_path: Path, corpus, bundle_key: str, perturb: float 
     outputs = run_session(loaded, {spec.name: sample})
     state.close()
 
-    (root / "warmup").mkdir()
+    (root / "warmup").mkdir(exist_ok=True)
     (root / "warmup" / "input-01.bin").write_bytes(sample.tobytes())
     expected = {
         name: {"shape": list(value.shape), "values": (np.asarray(value, dtype=np.float64) + perturb).ravel().tolist()}
@@ -585,19 +633,20 @@ def test_a_warmup_sample_may_describe_its_own_tensor(corpus, tmp_path):
     root = tmp_path / "bundle"
     shutil.copytree(bundle_root(corpus), root)
     manifest = read_bundle_manifest(root)
-    (root / "warmup").mkdir()
+    (root / "warmup").mkdir(exist_ok=True)
     values = np.zeros((1, 3, 64, 64), dtype=np.float32)
-    (root / "warmup" / "input-01.bin").write_bytes(values.tobytes())
+    # An undeclared member, so the bundle's own golden sample and its declared digest stay intact.
+    (root / "warmup" / "zeros.bin").write_bytes(values.tobytes())
 
     named = warmup_feed(
         root,
         manifest,
-        {"inputs": {manifest.inputs[0].name: {"path": "warmup/input-01.bin",
+        {"inputs": {manifest.inputs[0].name: {"path": "warmup/zeros.bin",
                                               "dtype": "float32", "shape": [1, 3, 64, 64]}}},
     )
     assert named[manifest.inputs[0].name].shape == (1, 3, 64, 64)
 
-    shorthand = warmup_feed(root, manifest, {"input": "warmup/input-01.bin"})
+    shorthand = warmup_feed(root, manifest, {"input": "warmup/zeros.bin"})
     assert shorthand[manifest.inputs[0].name].shape == (1, 3, 64, 64)
     assert warmup_feed(root, manifest, {}) == {}
 
@@ -616,7 +665,7 @@ def test_a_warmup_sample_the_cell_cannot_read_is_a_permanent_refusal(corpus, tmp
     root = tmp_path / "bundle"
     shutil.copytree(bundle_root(corpus), root)
     manifest = read_bundle_manifest(root)
-    (root / "warmup").mkdir()
+    (root / "warmup").mkdir(exist_ok=True)
     (root / "warmup" / "short.bin").write_bytes(b"\x00\x00\x00\x00")
     (root / "warmup" / "bad.json").write_bytes(b"{not json")
 

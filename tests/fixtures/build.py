@@ -10,14 +10,22 @@ the pipeline still agrees with itself.
 
 What gets built into the target directory::
 
-    bundles/<modelId>-<version>/   manifest.json, labels.json, transforms.json, model.onnx
+    bundles/<modelId>-<version>/   manifest.json, labels.json, transforms.json, model.onnx,
+                                   warmup/input-01.bin, warmup/expected-01.json
     images/                        the images with computable expected outputs
     bad/                           corrupt, truncated, empty, mislabelled, oversized, 16-bit
     spool/<cameraId>/...           camera-shaped JPEG plus its sidecar, written sidecar-first
     expected.json                  the oracle
 
-Nothing here is committed. The builder is fast enough to run per session, and ``onnx`` is a
-test-only dependency: the runtime never imports it.
+Every bundle also carries one golden warmup sample, so tier 1 exercises the warmup gate the
+component runs before a session serves work. The sample is the raw tensor the bundle's own
+preprocess produces from one known-answer image, and its expectation is what that bundle's graph
+answers on ``CPUExecutionProvider``. Both are generated here rather than recorded elsewhere, so a
+change to a graph or to a preprocess block moves the golden with it, and a change to only one of
+them is what fails the load.
+
+Nothing here is committed. The builder is fast enough to run per session; ``onnx`` is a test-only
+dependency, and ``onnxruntime`` is the component's own runtime dependency.
 
 Run it directly to inspect the corpus::
 
@@ -716,6 +724,82 @@ def build_spool(root: Path, seed: int, captures: int = 2) -> list:
     return records
 
 
+#: The element type of each raw warmup tensor, keyed by the manifest spelling.
+_WARMUP_DTYPES = {
+    "float32": np.float32,
+    "float16": np.float16,
+    "uint8": np.uint8,
+    "int8": np.int8,
+    "int32": np.int32,
+    "int64": np.int64,
+}
+
+
+def _warmup_sample(root: Path, directory: Path, document: dict, image_relative: str) -> dict:
+    """Write one golden warmup sample for a bundle and return its manifest entry.
+
+    The sample is produced the way the component produces one: the image is decoded, the bundle's
+    own task family preprocesses it, and the bundle's own graph answers on
+    ``CPUExecutionProvider``. What lands on disk is the raw little-endian input tensor and the
+    session's raw outputs, which is the pair ``engine/cell_main.run_warmup`` compares.
+
+    Args:
+        root: The corpus root, which holds ``images/``.
+        directory: The bundle directory being written.
+        document: The manifest document so far, without its ``warmup`` entry.
+        image_relative: The corpus-relative image to warm on.
+
+    Returns:
+        One ``manifest.warmup`` entry, in the schema's single-input form.
+
+    Raises:
+        ValueError: The bundle's preprocess produces more than one input tensor, which the
+            single-input form cannot describe.
+    """
+    import onnxruntime as ort
+
+    from image_processor.engine.decode import DecodeLimits, decode_image
+    from image_processor.engine.families import family_for
+
+    manifest = manifest_from_document(document)
+    family = family_for(manifest)
+    image = decode_image((root / image_relative).read_bytes(), DecodeLimits())
+    feed = family.preprocess(image, manifest)
+    if len(feed) != 1:
+        raise ValueError(f"{document['modelId']} preprocesses to {len(feed)} inputs, not one")
+    name, tensor = next(iter(feed.items()))
+
+    session = ort.InferenceSession(
+        str(directory / "model.onnx"), providers=["CPUExecutionProvider"]
+    )
+    names = [output.name for output in session.get_outputs()]
+    outputs = dict(zip(names, session.run(names, feed)))
+
+    dtype = next(spec["dtype"] for spec in document["inputs"] if spec["name"] == name)
+    array = np.ascontiguousarray(tensor, dtype=_WARMUP_DTYPES[dtype])
+    (directory / "warmup").mkdir(exist_ok=True)
+    (directory / "warmup" / "input-01.bin").write_bytes(
+        array.astype(array.dtype.newbyteorder("<"), copy=False).tobytes()
+    )
+    expected = {
+        output: {
+            "shape": [int(value) for value in np.shape(result)],
+            "values": np.asarray(result, dtype=np.float64).ravel().tolist(),
+        }
+        for output, result in outputs.items()
+    }
+    (directory / "warmup" / "expected-01.json").write_bytes(
+        (json.dumps(expected, indent=2) + "\n").encode("utf-8")
+    )
+    return {
+        "input": "warmup/input-01.bin",
+        "expected": "warmup/expected-01.json",
+        "inputName": name,
+        "dtype": dtype,
+        "shape": [int(value) for value in array.shape],
+    }
+
+
 def write_bundle(root: Path, spec: dict) -> dict:
     """Write one minimal bundle directory and return its manifest document.
 
@@ -727,7 +811,8 @@ def write_bundle(root: Path, spec: dict) -> dict:
         root: The corpus root.
         spec: The bundle description: ``modelId``, ``version``, ``onnx`` bytes, ``labels``,
             ``inputs``, ``outputs``, ``family``, ``familyParams``, ``preprocess``,
-            ``decisionRules``, and optional ``maxResultItems``, ``dynamicBatch``,
+            ``decisionRules``, ``warmupImage`` (the corpus-relative image the bundle's golden
+            warmup sample is taken from), and optional ``maxResultItems``, ``dynamicBatch``,
             ``estimatedDeviceMiB``, and ``transformVersion``.
 
     Returns:
@@ -778,6 +863,10 @@ def write_bundle(root: Path, spec: dict) -> dict:
         "keyId": None,
         "transformVersion": transform_version,
     }
+    manifest["warmup"] = [_warmup_sample(root, directory, manifest, spec["warmupImage"])]
+    for relative in ("warmup/input-01.bin", "warmup/expected-01.json"):
+        manifest["files"][relative] = _sha256((directory / relative).read_bytes())
+
     (directory / "manifest.json").write_bytes((json.dumps(manifest, indent=2) + "\n").encode("utf-8"))
     return manifest
 
@@ -1051,6 +1140,7 @@ def _classification_bundle(root: Path, images: dict) -> dict:
             "preprocess": CLASSIFICATION_PREPROCESS,
             "decisionRules": rules,
             "maxResultItems": 8,
+            "warmupImage": "images/quadrant-red.png",
         },
     )
 
@@ -1120,6 +1210,7 @@ def _detection_bundles(root: Path) -> dict:
         "family": "detection",
         "decisionRules": DETECTION_RULES,
         "maxResultItems": 16,
+        "warmupImage": "images/detect-scene.png",
     }
     grid = write_bundle(
         root,
@@ -1229,6 +1320,7 @@ def _segmentation_bundles(root: Path) -> dict:
             "preprocess": SMALL_PREPROCESS,
             "decisionRules": SEGMENTATION_RULES,
             "maxResultItems": 8,
+            "warmupImage": "images/seg-rect.png",
         },
     )
     threshold_cases = [
@@ -1264,6 +1356,7 @@ def _segmentation_bundles(root: Path) -> dict:
             "preprocess": SMALL_PREPROCESS,
             "decisionRules": SEGMENTATION_RULES,
             "maxResultItems": 8,
+            "warmupImage": "images/seg-red-rect.png",
         },
     )
     argmax_cases = [
@@ -1338,6 +1431,7 @@ def _anomaly_bundles(root: Path) -> dict:
         "decisionRules": ANOMALY_RULES,
         "maxResultItems": 4,
         "inputs": [{"name": "images", "dtype": "float32", "shape": [1, 3, 32, 32]}],
+        "warmupImage": "images/anomaly-bad.png",
     }
     scalar_score = PATCH_DIFFERENCE * PATCH_FRACTION
     scalar = write_bundle(

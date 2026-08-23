@@ -47,6 +47,7 @@ from image_processor.commands import ProcessorCommands
 from image_processor.completion import CleanupError, Completer
 from image_processor.config import CompletionPolicy, ConfigError, parse_component_config
 from image_processor.connectivity import ConnectivityProvider, RouteStatus
+from image_processor.engine.protocol import is_input_error
 from image_processor.engine.residency import ResidencyPolicy
 from image_processor.engine.scheduler import Scheduler
 from image_processor.engine.supervisor import Supervisor, SupervisorError
@@ -956,7 +957,10 @@ class ImageProcessor(ConfigurationChangeListener):
                 inference_id=job.inference_id,
                 topic=prepared.topic,
                 encoded_bytes=prepared.encoded_bytes,
-                gating=bool(self._config.publish.require_confirmation_before_cleanup),
+                # Confirmation always gates cleanup: the result is the only durable record
+                # that a decision was made, so nothing moves before the broker has it (D-IP-6,
+                # D-IP-20).
+                gating=True,
             )
         ]
         sidecar = (str(installed.path), installed.sha256) if installed is not None else None
@@ -1036,7 +1040,7 @@ class ImageProcessor(ConfigurationChangeListener):
         self._mirror.publish(route.id, route.outputs.decision_signals, body)
         current = self._ledger.get(job.inference_id) or job
         if current.state in (JobState.PROCESSING_EXHAUSTED, JobState.INPUT_INVALID):
-            self._complete(current, route, error_class=result.error_class)
+            self._complete(current, route, error_class=result.error_class, error_code=code)
 
     def _reply(self, job: Any, route: Any, body: dict) -> None:
         """Answer the requester of a trigger job on its ``reply_to`` topic (DESIGN.md 4.2)."""
@@ -1100,9 +1104,15 @@ class ImageProcessor(ConfigurationChangeListener):
         self._note(route_id, f"PUBLISH_EXHAUSTED: {error}")
         self._events.publish_exhausted(route_id, inference_id, error, action)
 
-    def _complete(self, job: Any, route: Any, error_class: Optional[str] = None) -> None:
+    def _complete(
+        self,
+        job: Any,
+        route: Any,
+        error_class: Optional[str] = None,
+        error_code: Optional[str] = None,
+    ) -> None:
         """Take the route completion action under a persisted intent (DESIGN.md 7)."""
-        policy = self._effective_policy(job, route, error_class)
+        policy = self._effective_policy(job, route, error_class, error_code)
         members = self._members(job, route)
         try:
             intent = self._completer.plan(job, policy, members)
@@ -1144,18 +1154,30 @@ class ImageProcessor(ConfigurationChangeListener):
         except OSError as exc:  # noqa: BLE001 - a staged copy left behind is not a failed job
             logger.debug("the staged copy of %s could not be removed: %s", job.inference_id, exc)
 
-    def _effective_policy(self, job: Any, route: Any, error_class: Optional[str]) -> Any:
+    def _effective_policy(
+        self,
+        job: Any,
+        route: Any,
+        error_class: Optional[str],
+        error_code: Optional[str] = None,
+    ) -> Any:
         """Resolve the completion policy this job actually runs under.
 
         Two configured behaviors are resolved here rather than in the completer, because both
-        depend on what happened to this job. A permanent failure is a property of the input, not
-        of the run, so it takes the invalid-input action (``schemas/inference-result.schema.json``
-        says so of the ``permanent`` error class). And a route with no ``failedDir`` quarantines
-        in place, which is a retain of the file with the terminal state recorded against it
-        (DESIGN.md 11).
+        depend on what happened to this job.
+
+        The first is which failure this was. Only a permanent failure the *input* caused takes
+        the invalid-input action, because that action may quarantine and only bad evidence may be
+        quarantined (DESIGN.md 15.2). A permanent model, bundle, provider, GPU, runtime, or
+        postprocess-schema failure says nothing about the image, so it takes the operational
+        action -- retain, by default -- and the event raised on the way here is what asks an
+        operator to repair the deployment. ``engine/protocol.is_input_error`` owns that split.
+
+        The second is that a route with no ``failedDir`` quarantines in place, which is a retain
+        of the file with the terminal state recorded against it (DESIGN.md 11).
         """
         policy = route.completion_for(job.source.kind)
-        if error_class == "permanent":
+        if error_class == "permanent" and is_input_error(error_code):
             policy = replace(policy, on_operational_failure=policy.on_invalid_input)
         if policy.failed_dir is None:
             changes = {

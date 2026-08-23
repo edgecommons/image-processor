@@ -86,7 +86,6 @@ byte for byte in the ledger, and published with positive transport confirmation.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `confirmationTimeoutSecs` | number > 0 | `10` | How long one publish attempt waits for a PUBACK at QoS 1, or for the Greengrass IPC publish operation to complete, before it counts as a failed attempt. The stored bytes are retried unchanged. |
-| `requireConfirmationBeforeCleanup` | boolean | `true` | Whether archive, delete, and quarantine wait for transport confirmation. Turning it off lets the component reclaim disk during a long broker outage at the cost of the evidence guarantee, so a regulated deployment leaves it on. |
 | `maxAttempts` | integer ≥ 1 | `100` | How many publish attempts one outbox row makes before the job moves to `PUBLISH_EXHAUSTED` and waits for the `retry-publication` command. The row and its bytes are kept. |
 | `outboxCapacity` | integer ≥ 1 | `100000` | How many rows the outbox holds. This bounds the count of pending publications; `outboxReserveBudgetMiB` bounds their size. |
 | `outboxReserveBudgetMiB` | integer ≥ 1 | `256` | How much outbox and evidence capacity admission may hold in total. A job is admitted only after it reserves room for the largest result its route can produce, so a finished job is never stranded by a full outbox; when the reserve cannot be met the component stops claiming new work and reports the pressure. |
@@ -144,9 +143,9 @@ block, which is also where the archive and quarantine directories live.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `onSuccess` | action | `archive` | What happens to the input after the result is published and confirmed. |
-| `onInvalidInput` | action | `quarantine` | What happens to an input that can never succeed: a corrupt or undecodable image, a digest that does not match its sidecar, a reference that escapes its root. |
-| `onOperationalFailure` | action | `retainInPlace` | What happens when inference exhausts its retry budget. The input is intact, so retaining it keeps a later reprocess possible. |
-| `onPublishFailure` | action | `retainInPlace` | What happens when publication exhausts its attempts. The result is already committed and the outbox row is kept, so the input is retained until you run `retry-publication`. |
+| `onInvalidInput` | action | `quarantine` | What happens to an input that can never succeed: a corrupt or undecodable image, a digest that does not match its sidecar, an input over the byte bound, an input that is no longer there, or a reference that escapes its root. |
+| `onOperationalFailure` | action | `retainInPlace` | What happens when inference exhausts its retry budget, and what happens to a permanent failure the image did not cause — a model, bundle, provider, GPU, runtime, or postprocess-schema failure. The input is intact, so retaining it keeps a later reprocess possible once you repair the deployment. |
+| `onPublishFailure` | `retainInPlace` | `retainInPlace` | What happens when publication exhausts its attempts. `retainInPlace` is the only value: the result is already committed and the outbox row is kept, so the input stays where it is until you run `retry-publication`. Any other value is rejected with `ON_PUBLISH_FAILURE_NOT_SUPPORTED`. |
 | `onCollision` | `fail` \| `suffix` | `fail` | What happens when an action's target path already holds a different object. `fail`: the job records `CLEANUP_FAILED` and both files are left intact, so it waits for `retry-cleanup` or an operator. `suffix`: the input is installed beside the occupant under a deterministic name derived from its own digest, so the move completes and the name is reproducible from the ledger. Neither policy overwrites the object already there. |
 
 An **action** is one of:
@@ -329,7 +328,7 @@ Every rejection carries a stable code. The most common ones:
       "gpu": { "devices": ["0"], "residentMemoryBudgetPercent": 80, "reserveMiB": 2048 },
       "scheduler": { "maxBatchLatencyMs": 20, "hotTtlSecs": 120, "minResidencySecs": 15 },
       "discovery": { "rescanSecs": 60, "debounceMs": 500 },
-      "publish": { "confirmationTimeoutSecs": 10, "requireConfirmationBeforeCleanup": true, "outboxReserveBudgetMiB": 256 },
+      "publish": { "confirmationTimeoutSecs": 10, "outboxReserveBudgetMiB": 256 },
       "signing": {
         "required": true,
         "trustedKeys": [

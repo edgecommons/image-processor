@@ -64,7 +64,7 @@ may publish a duplicate, so consumers deduplicate on `inferenceId`.
   "model": {
     "id": "synthetic-anomaly-scalar",
     "version": "1.0.0",
-    "digest": "sha256:7dfefce8…",
+    "digest": "sha256:4a87394f…",
     "runtime": "onnxruntime",
     "providers": ["CPUExecutionProvider"],
     "gpu": null,
@@ -98,7 +98,7 @@ may publish a duplicate, so consumers deduplicate on `inferenceId`.
 | `outputs` | Only the declared task family's collection is populated. Masks and tensors are never published; segmentation reports pixel counts and regions. |
 | `outputs.truncated` | Whether collections were bounded to fit the message budget. When it is `true`, `artifacts` names the sidecar holding the full result. |
 | `artifacts` | The evidence sidecar this result belongs to, present whenever the route writes one. |
-| `error` | `{code, message, class}` on a failure. `class` is `transient`, `permanent`, or `contaminating`. |
+| `error` | `{code, message, class}` on a failure. `class` is `transient`, `permanent`, or `contaminating`. A `permanent` failure repeats on every attempt; `code` says whether the image or the deployment caused it, and that is what decides the completion action. |
 
 A failed result is still published, because a consumer that hears nothing cannot tell a held image
 from a component that stopped:
@@ -214,8 +214,8 @@ answer can never disagree with a pushed one:
       "state": "ONLINE",
       "detail": "/var/spool/camera-adapter/cam-01",
       "attributes": {
-        "desiredGeneration": "sha256:7dfefce8…",
-        "activeGeneration": "sha256:7dfefce8…",
+        "desiredGeneration": "sha256:4a87394f…",
+        "activeGeneration": "sha256:4a87394f…",
         "sourceReachable": true,
         "executorHealthy": true,
         "queued": 0,
@@ -234,7 +234,7 @@ serving the last known good model), `DEGRADED` (it cannot decide right now), or 
 
 | Verb | Scope | Request body | Reply |
 |---|---|---|---|
-| `get-models` | component | `{cursor?, max?}` | `{models: [{id, version, digest, uri, staged, warmed, activeRoutes, stagingRoutes, rollback, error}], nextCursor, total}` |
+| `get-models` | component | `{cursor?, max?}` | `{models: [{id, version, digest, uri, staged, warmed, warmupSamples, loadMs, deviceMiB, activeRoutes, stagingRoutes, rollback, error}], nextCursor, total}` |
 | `get-queue` | both | `{route?, states?, cursor?, max?}` | `{route, jobs: [{inferenceId, route, state, attempts, source, model, lastError}], nextCursor, counts, scheduler}` |
 | `trigger-rescan` | both | `{route?}` | `{route, discovered}` |
 | `preload-model` | component | `{id?, digest?}` | deferred: `{id, version, digest, staged, warmed, routesSwitched}` |

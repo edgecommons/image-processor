@@ -31,7 +31,8 @@ You need a local MQTT broker (`docker run -d -p 1883:1883 --name emqx emqx/emqx:
    ```
 
 2. Build the test corpus and pack the model bundle `test-configs/config.json` pins. The corpus is
-   generated rather than downloaded, so the digest is reproducible; `make_bundle.py` prints it.
+   generated rather than downloaded, so the digest is reproducible on the same ONNX Runtime;
+   `make_bundle.py` prints it.
 
    ```bash
    python3 tests/fixtures/build.py --out tests/fixtures/out
