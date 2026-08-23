@@ -40,9 +40,8 @@ base architecture, measured under residency pressure".
 Warmup goldens and their tolerance
 ----------------------------------
 Every bundle carries one golden warmup sample -- the raw preprocessed input tensor and the raw
-session outputs for it -- produced on ``CPUExecutionProvider``, so the corpus is reproducible on
-any machine and a bundle is not tied to the card that generated it. The declared tolerance is
-therefore a **provider** tolerance: at load time the sample is replayed on whatever provider the
+session outputs for it -- produced on ``CPUExecutionProvider``, so a bundle is not tied to the card
+that generated it. The declared tolerance is therefore a **provider** tolerance: at load time the sample is replayed on whatever provider the
 session got, and on CUDA that is a different set of kernels.
 
 The numbers it is set from were measured, not guessed. Over a whole 40-bundle corpus on an
@@ -113,7 +112,16 @@ DEFAULT_TIERS_MIB = (50, 200, 600, 1500)
 #: How many bundles the default corpus holds. Ten per tier is about 23 GiB.
 DEFAULT_COUNT = 40
 
-#: The seed every pseudo-random choice derives from, so two runs produce identical digests.
+#: The seed every pseudo-random choice derives from.
+#:
+#: What the seed fixes exactly is the model: ``model.onnx``, ``labels.json``, ``transforms.json``,
+#: ``warmup/input-01.bin``, and the signing key are byte-identical for a given seed on any machine.
+#: What it does not fix is ``warmup/expected-01.json``, which records what a CPU ONNX Runtime
+#: session answered, and CPU kernels differ between processors: building the default corpus on an
+#: RTX 5080 desktop and on lab-5950x produced identical files throughout for all twenty MobileNetV2
+#: bundles, and a different ``expected-01.json`` -- and therefore a different bundle digest -- for
+#: all twenty YOLOX-S bundles, whose golden holds 714,000 values rather than 1,000. Two runs on one
+#: machine reproduce every digest.
 DEFAULT_SEED = 20260823
 
 #: Relative standard deviation of the multiplicative weight perturbation.

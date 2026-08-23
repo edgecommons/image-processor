@@ -639,50 +639,68 @@ unverified inference is `HOLD`.
 
 ### 17.1 Phase 0 SLO baseline
 
-Measured by the tier-3 suite (§16.1) on the desktop RTX 5080 (16,303 MiB, WSL2, driver 596.49,
-ONNX Runtime 1.29.0, CUDA EP) against the 40-bundle synthesized corpus: 23,500 MiB of `model.onnx`
-across the 50/200/600/1500 MiB tiers, 40 routes, one route per bundle,
-`gpu.residentMemoryBudgetPercent` 80 (13,042 MiB), `gpu.reserveMiB` 2,048, one executor cell,
-`loadConcurrencyPerGpu` 1, 96 arrivals per pattern at 8 per second. The raw record is
-`tests/nvidia/results/nvidia-geforce-rtx-5080-2026-08-23.json`.
+Measured by the tier-3 suite (§16.1) on both GPUs of D-IP-13, against the 40-bundle synthesized
+corpus: 23,500 MiB of `model.onnx` across the 50/200/600/1500 MiB tiers, 40 routes, one route per
+bundle, `gpu.residentMemoryBudgetPercent` 80, `gpu.reserveMiB` 2,048, one executor cell,
+`loadConcurrencyPerGpu` 1, 96 arrivals per pattern at 8 per second, ONNX Runtime 1.29.0 on the CUDA
+provider. The raw records are `tests/nvidia/results/nvidia-geforce-rtx-5080-2026-08-23.json` and
+`tests/nvidia/results/nvidia-geforce-rtx-2080-super-2026-08-23.json`.
 
-| Pattern | Queue p50 / p95 / p99 (ms) | Inference p50 / p95 / p99 (ms) | Cold load p50 / p95 / max (ms) | Reload p50 / p95 / max (ms) | Evictions | Recycles | OOM |
-|---|---|---|---|---|---|---|---|
-| uniform | 37,243 / 55,215 / 56,014 | 4.4 / 10.5 / 12.4 | 912 / 2,766 / 2,906 | — | 16 | 1 | 0 |
-| Zipf-skewed | 6,343 / 18,165 / 19,997 | 1.9 / 7.0 / 12.3 | — | 406 / 2,555 / 2,859 | 3 | 1 | 0 |
-| synchronized burst | 16,542 / 36,916 / 37,795 | 4.8 / 14.5 / 19.8 | — | 994 / 2,749 / 2,993 | 44 | 0 | 0 |
-| scheduled prefetch | 3,976 / 10,256 / 11,197 | 4.4 / 6.9 / 13.5 | — | 768 / 2,701 / 2,940 | 20 | 0 | 0 |
+| Device | Installed | Residency budget | Corpus against budget |
+|---|---|---|---|
+| RTX 5080 (WSL2, driver 596.49) | 16,303 MiB | 13,042 MiB | 1.8x |
+| RTX 2080 Super (`lab-5950x`, driver 595.71.05) | 8,192 MiB | 6,553 MiB | 3.6x |
 
-Every pattern completed every admitted job: 368 images, 368 results, none dropped, retried, or
-blocked. Peak device residency was 12,173 to 12,932 MiB against the 13,042 MiB budget, and free
-device memory never fell below 2,330 MiB against the 2,048 MiB reserve.
+**RTX 5080**
+
+| Pattern | Queue p50 / p95 / p99 (ms) | Inference p50 / p95 / p99 (ms) | Cold load p50 / p95 / max (ms) | Reload p50 / p95 / max (ms) | Evictions | Deferred | Recycles | OOM |
+|---|---|---|---|---|---|---|---|---|
+| uniform | 37,243 / 55,215 / 56,014 | 4.4 / 10.5 / 12.4 | 912 / 2,766 / 2,906 | — | 16 | 0 | 1 | 0 |
+| Zipf-skewed | 6,343 / 18,165 / 19,997 | 1.9 / 7.0 / 12.3 | — | 406 / 2,555 / 2,859 | 3 | 0 | 1 | 0 |
+| synchronized burst | 16,542 / 36,916 / 37,795 | 4.8 / 14.5 / 19.8 | — | 994 / 2,749 / 2,993 | 44 | 102 | 0 | 0 |
+| scheduled prefetch | 3,976 / 10,256 / 11,197 | 4.4 / 6.9 / 13.5 | — | 768 / 2,701 / 2,940 | 20 | 0 | 0 | 0 |
+
+Cold load measured 189 to 1,719 MiB of device memory per generation (p50 598 MiB); an unload cost
+21 to 149 ms at p50 and returned 200 to 1,724 MiB. Peak residency 12,173 to 12,932 MiB against the
+13,042 MiB budget; free device memory never below 2,330 MiB against the 2,048 MiB reserve.
+
+**RTX 2080 Super**
+
+| Pattern | Queue p50 / p95 / p99 (ms) | Inference p50 / p95 / p99 (ms) | Cold load p50 / p95 / max (ms) | Reload p50 / p95 / max (ms) | Evictions | Deferred | Recycles | OOM |
+|---|---|---|---|---|---|---|---|---|
+| uniform | 48,344 / 84,943 / 99,052 | 4.0 / 7.8 / 7.9 | 1,824 / 4,672 / 5,492 | — | 35 | 540 | 1 | 0 |
+| Zipf-skewed | 4,605 / 39,962 / 43,844 | 1.1 / 7.8 / 8.1 | — | 658 / 4,514 / 4,549 | 18 | 225 | 0 | 0 |
+| synchronized burst | 33,624 / 89,228 / 106,524 | 4.0 / 7.8 / 7.9 | — | 1,829 / 4,495 / 4,646 | 47 | 805 | 0 | 0 |
+| scheduled prefetch | 5,724 / 15,100 / 15,918 | 4.0 / 7.8 / 7.8 | — | 1,144 / 4,046 / 4,079 | 29 | 233 | 0 | 0 |
+
+Cold load measured 72 to 1,707 MiB per generation (p50 444 MiB); an unload cost about 18 ms at p50.
+Peak residency 6,154 to 6,428 MiB against the 6,553 MiB budget; free device memory never below
+2,666 MiB against the 2,048 MiB reserve.
 
 Reading the numbers:
 
-- **Cold load is the whole cost.** A cold load costs 912 ms at p50 and 2,906 ms at worst against a
-  4.4 ms inference, so the 40 cold loads of the first pattern are most of the 61 s it took. Queue
-  latency is load latency, and it is what admission, minimum residency, and cost-aware eviction
-  exist to bound. Loading measured 189 to 1,719 MiB of device memory per generation (p50 598 MiB).
-- **An unload costs 21 to 149 ms at p50** and returns the generation's footprint: 200 to 1,724 MiB.
+- **Cold load is the whole cost.** A cold load costs 912 ms at p50 on Blackwell and 1,824 ms on
+  Turing, against a 4 ms inference. Queue latency is load latency, and it is what admission,
+  minimum residency, and cost-aware eviction exist to bound.
+- **Halving device memory costs latency, not correctness.** The 2080 Super holds a third as much
+  resident, so it deferred dispatches 540 to 805 times per pattern where the 5080 deferred at most
+  102, evicted about twice as often, and paid roughly twice the queue latency. Both cards completed
+  every admitted job with zero out-of-memory: 368 images, 368 results, none dropped, retried, or
+  blocked.
 - **Skew and prefetch are what turn residency into latency.** Zipf arrivals concentrate on a few
-  generations, so 21 reloads serve 96 images and queue p50 falls to 6.3 s. Scheduled prefetch warms
-  the next segment while the queue is quiet and drops queue p50 to 4.0 s, the lowest of the four,
-  with all 32 warmups accepted and none refused.
-- **A synchronized burst is the pressure case.** Every route firing at once deferred 102 dispatches
-  for want of device memory and cost 44 evictions and 43 reloads to serve 80 images, and still ran
-  without an out-of-memory, a dropped job, or a recycle.
+  generations, and scheduled prefetch warms the next segment while the queue is quiet: on both
+  cards those are the two lowest queue p50 figures, and all 32 warmups were accepted on both.
 - **Inference latency is the base architectures'** -- MobileNetV2 at 224x224 and YOLOX-S at
   640x640 -- not the padded bundle size: the pad costs load time and device memory, not arithmetic
   (`tools/synth_corpus.py`).
 - **One recycle per cell lifetime is expected, not a fault under load.** The first generation
   loaded on a fresh cell measures the CUDA context in its footprint and cannot return it on unload,
-  so the reclaim check in §10.4 fires once and the supervisor restarts the cell. Both recorded
-  recycles are that case.
+  so the reclaim check of §10.4 fires once and the supervisor restarts the cell. Every recorded
+  recycle on both cards is that case.
 
-These numbers are the Phase 0 baseline pending the `lab-5950x` RTX 2080 Super run (D-IP-13). A
-Turing card with half the memory holds fewer generations resident, so its eviction and reload
-counts, and therefore its queue latencies, are expected to be higher; its cold-load and inference
-figures set the low end of the supported range.
+These figures are the Phase 0 SLO baseline. The 2080 Super sets the low end of the supported range
+and the 5080 the high end; a deployment sized between them should be read against the 2080 Super
+column.
 
 ## 18. Cross-repo prerequisites
 

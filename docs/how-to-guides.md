@@ -402,8 +402,14 @@ the inference latencies as the base architecture's, measured under residency pre
 
    The defaults are 40 bundles across the 50 MB, 200 MB, 600 MB, and 1.5 GB tiers, which is about
    23 GB of `model.onnx` and takes about five minutes on an NVMe disk. Use `--count`, `--tiers`,
-   and `--seed` to change the shape; the same seed always produces the same digests, signing key
-   included.
+   and `--seed` to change the shape.
+
+   The seed fixes the models: `model.onnx`, `labels.json`, `transforms.json`, the warmup input
+   tensor, and the signing key are byte-identical for a given seed on any machine. It does not fix
+   the golden warmup answers, which record what a CPU ONNX Runtime session produced, and CPU
+   kernels differ between processors. Two runs on one machine reproduce every bundle digest; the
+   same seed on a different processor can give a different digest for a model whose golden is
+   large. Build the corpus on the machine that will run the suite.
 
 3. Check `~/ip-corpus/corpus.json`. It records every bundle's digest, tier, pad size, base
    architecture, and estimated device memory, and it is what the suite reads.
