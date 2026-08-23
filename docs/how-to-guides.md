@@ -285,6 +285,25 @@ count, and `tools/fetch_test_assets.py` verifies them into `tests/.cache/`, whic
 1. A model whose assets are missing skips with the command that fetches them, so a partial corpus
    runs what it can.
 
+### Add the CUDA leg
+
+On a machine with the CUDA provider, set `EC_NVIDIA` as well and the suite runs twice: once on
+`CPUExecutionProvider` and once on `CUDAExecutionProvider`, with the same images, the same bundles,
+and the same goldens.
+
+```bash
+EC_LIVE_MODELS=1 EC_NVIDIA=1 python -m pytest tests/live_models -o addopts="" -q
+```
+
+The goldens are produced on CPU, so the CUDA parametrization asserts against them rather than
+against a second baseline: a model whose CUDA answer leaves the golden's top-5 overlap, box IoU,
+pixel fraction, or anomaly score is a parity failure. The bundle is packed and staged once and both
+legs open a session on it, so the second leg costs only the sessions and the inference. The run
+prints the graph time of every image per model and provider when it ends.
+
+`--update-goldens` is refused on any provider other than CPU, so a CUDA run cannot overwrite the
+baseline it is being compared to.
+
 ### Build the anomaly model
 
 The PatchCore model is built rather than downloaded, because PatchCore needs no training epochs and
@@ -353,3 +372,84 @@ these libraries before it creates a session.
 
 A route whose `runtime.requiredProvider` is `CUDAExecutionProvider` refuses to run when the session
 lands on CPU (`PROVIDER_CPU_ONLY`); the result's `model.providers` always names the actual assignment.
+
+## Run the tier-3 residency benchmark
+
+The tier-3 suite measures what a GPU host does when the configured model set is several times
+larger than device memory: cold load, warm inference, eviction, reload, executor recycles, and the
+queue and inference latency of four arrival patterns. It needs a synthesized corpus, because the
+real models of the tier-2 corpus all fit on any card at once and nothing is ever evicted.
+
+Every run writes `tests/nvidia/results/<gpu-class>-<date>.json`, and those numbers are the SLO
+baseline recorded in `DESIGN.md` section 17.
+
+### Build the corpus
+
+`tools/synth_corpus.py` grows N distinct signed bundles from the MobileNetV2 and YOLOX-S
+architectures in the tier-2 cache. Each one gets seeded weight perturbations, so no two share a
+digest or a byte of weight data, and a padded initializer that sizes it to a target tier. The pad
+costs device memory and one host-to-device copy per load; it costs no meaningful compute, so read
+the inference latencies as the base architecture's, measured under residency pressure.
+
+1. Fetch the tier-2 corpus the bases come from, if you have not already:
+   `python tools/fetch_test_assets.py`
+2. Build the corpus on a local disk. On WSL2 use a Linux path, not a Windows mount: the build
+   writes about 47 GB and the mount is several times slower.
+
+   ```bash
+   python tools/synth_corpus.py --out ~/ip-corpus
+   ```
+
+   The defaults are 40 bundles across the 50 MB, 200 MB, 600 MB, and 1.5 GB tiers, which is about
+   23 GB of `model.onnx` and takes about five minutes on an NVMe disk. Use `--count`, `--tiers`,
+   and `--seed` to change the shape; the same seed always produces the same digests, signing key
+   included.
+
+3. Check `~/ip-corpus/corpus.json`. It records every bundle's digest, tier, pad size, base
+   architecture, and estimated device memory, and it is what the suite reads.
+
+### Run the suite
+
+1. Point the suite at the corpus and run it:
+
+   ```bash
+   EC_NVIDIA=1 EC_NVIDIA_CORPUS=~/ip-corpus \
+     python -m pytest tests/nvidia -o addopts="" -q
+   ```
+
+2. Read the results file the run prints. The table in `DESIGN.md` section 17 is built from it.
+
+The knobs are environment variables:
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `EC_NVIDIA` | Runs the suite. Without it every test is skipped. | unset |
+| `EC_NVIDIA_CORPUS` | The corpus root. | `~/ip-corpus` |
+| `EC_NVIDIA_DEVICE` | The CUDA device ordinal. | `0` |
+| `EC_NVIDIA_ROUTES` | How many corpus bundles to bind routes to. | every bundle |
+| `EC_NVIDIA_ARRIVALS` | Images per arrival pattern. | `96` |
+| `EC_NVIDIA_RATE` | Arrivals per second for the paced patterns. | `8` |
+| `EC_NVIDIA_PATTERNS` | A subset of `uniform,zipf,burst,prefetch`. | all four |
+| `EC_NVIDIA_WORK` | Scratch space for the ledger and the route spools. | `~/ip-tier3-work` |
+| `EC_NVIDIA_RESULTS` | Where the results file is written. | `tests/nvidia/results` |
+
+Keep the work directory on a local disk as well. The rig discovers arrivals through the
+component's own spool source, which watches the directory, and a Windows mount is outside
+inotify's reach.
+
+### What the patterns do
+
+| Pattern | Arrivals |
+|---|---|
+| `uniform` | One capture per slot, round-robin over every route. |
+| `zipf` | The same rate, with routes drawn from a Zipf distribution, so a few routes take most of the traffic and the tail still has to be served. |
+| `burst` | Every route fires at once, in waves, with a quiet gap between them. |
+| `prefetch` | The next segment of routes is staged and warmed with the `preload-model` path while the queue is quiet, and only then do its arrivals reach the spool. |
+
+### On a smaller card
+
+The suite refuses to run when the routed corpus fits inside the residency budget, because then
+nothing is ever evicted and the measurement means nothing. On an 8 GB card the default corpus is
+already several times the budget; to shorten a run instead, lower `EC_NVIDIA_ROUTES` and
+`EC_NVIDIA_ARRIVALS` together, and keep enough of the 1.5 GB tier in the routed set to stay over
+the budget.

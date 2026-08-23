@@ -1,0 +1,813 @@
+{
+  "schemaVersion": 1,
+  "gpuClass": "NVIDIA GeForce RTX 5080",
+  "deviceTotalMiB": 16303,
+  "device": "0",
+  "onnxruntime": "1.29.0",
+  "providers": [
+    "CUDAExecutionProvider"
+  ],
+  "startedAt": "2026-08-23T21:13:00Z",
+  "corpus": {
+    "root": "/home/mbreissi/ip-corpus",
+    "bundles": 40,
+    "routes": 40,
+    "tiersMiB": [
+      50,
+      200,
+      600,
+      1500
+    ],
+    "totalModelMiB": 23500.0,
+    "seed": 20260823
+  },
+  "budget": {
+    "residentMemoryBudgetPercent": 80,
+    "reserveMiB": 2048,
+    "budgetMiB": 13042
+  },
+  "arrivals": {
+    "perPattern": 96,
+    "ratePerSec": 8.0
+  },
+  "patterns": [
+    {
+      "pattern": "uniform",
+      "arrivals": 96,
+      "arrivalSecs": 11.9,
+      "wallSecs": 60.6,
+      "drained": true,
+      "jobs": {
+        "results": 96,
+        "succeeded": 96,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 96,
+          "p50": 37243.0,
+          "p95": 55215.25,
+          "p99": 56013.7,
+          "min": 41.0,
+          "max": 56160.0,
+          "mean": 32226.45
+        },
+        "inference": {
+          "count": 96,
+          "p50": 4.4,
+          "p95": 10.45,
+          "p99": 12.43,
+          "min": 1.72,
+          "max": 12.97,
+          "mean": 4.45
+        },
+        "cellTotal": {
+          "count": 96,
+          "p50": 37252.97,
+          "p95": 55234.23,
+          "p99": 56018.89,
+          "min": 59.92,
+          "max": 56180.74,
+          "mean": 32237.78
+        },
+        "endToEnd": {
+          "count": 96,
+          "p50": 37878.23,
+          "p95": 55952.08,
+          "p99": 56804.59,
+          "min": 327.12,
+          "max": 56939.14,
+          "mean": 33118.98
+        }
+      },
+      "loads": {
+        "cold": 40,
+        "coldMs": {
+          "count": 40,
+          "p50": 911.92,
+          "p95": 2765.87,
+          "p99": 2869.31,
+          "min": 116.29,
+          "max": 2905.76,
+          "mean": 1179.58
+        },
+        "coldDeviceMiB": {
+          "count": 40,
+          "p50": 598.0,
+          "p95": 1713.05,
+          "p99": 1717.05,
+          "min": 189.0,
+          "max": 1719.0,
+          "mean": 775.98
+        },
+        "reload": 0,
+        "reloadMs": {
+          "count": 0
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 16,
+        "unloadMs": {
+          "count": 16,
+          "p50": 32.97,
+          "p95": 354.5,
+          "p99": 593.84,
+          "min": 19.78,
+          "max": 653.68,
+          "mean": 97.14
+        },
+        "freedMiB": {
+          "count": 16,
+          "p50": 1645.0,
+          "p95": 1722.5,
+          "p99": 1723.7,
+          "min": 203.0,
+          "max": 1724.0,
+          "mean": 1305.19
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 0,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 0
+        }
+      },
+      "device": {
+        "peakResidentMiB": 12767,
+        "minFreeMiB": 2330,
+        "budgetMiB": 13042,
+        "reserveMiB": 2048
+      },
+      "recycles": 1,
+      "schedulerCounters": {
+        "dispatched": 96,
+        "succeeded": 96,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 40,
+        "evictions": 16,
+        "deferred": 0,
+        "recycles": 1,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 1,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:8896317acb62a14d689b3a11113e73a7839fccf6972d94f43b393a62b0871d21",
+              "sha256:9942e92dfa5e578daaa86f928fc55321cafd0bdcd57ba6360be44cc6bb9cfe3c",
+              "sha256:a1315e01125b0985e2df0ee70512f8d50b1ba5c5ae626b60c0a50f7b38899424",
+              "sha256:bd70e1651e6f85e4507da4323a4bac1810fc32e6ed7b4901e559ad1c07c6710b",
+              "sha256:d31049ffa130f7cad9193a54afac311134fd3d833e86cb65176750fa3e335988",
+              "sha256:e8dd78794b0ec8ac176093f680bdfe2cc75cedadaf6d4e404529818b359d4e65"
+            ],
+            "residentMib": {
+              "sha256:e8dd78794b0ec8ac176093f680bdfe2cc75cedadaf6d4e404529818b359d4e65": 465,
+              "sha256:a1315e01125b0985e2df0ee70512f8d50b1ba5c5ae626b60c0a50f7b38899424": 562,
+              "sha256:8896317acb62a14d689b3a11113e73a7839fccf6972d94f43b393a62b0871d21": 306,
+              "sha256:d31049ffa130f7cad9193a54afac311134fd3d833e86cb65176750fa3e335988": 562,
+              "sha256:9942e92dfa5e578daaa86f928fc55321cafd0bdcd57ba6360be44cc6bb9cfe3c": 306,
+              "sha256:bd70e1651e6f85e4507da4323a4bac1810fc32e6ed7b4901e559ad1c07c6710b": 562
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 96,
+          "succeeded": 96,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 40,
+          "evictions": 16,
+          "deferred": 0,
+          "recycles": 1,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 96
+      }
+    },
+    {
+      "pattern": "zipf",
+      "arrivals": 96,
+      "arrivalSecs": 11.9,
+      "wallSecs": 28.7,
+      "drained": true,
+      "jobs": {
+        "results": 96,
+        "succeeded": 96,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 96,
+          "p50": 6343.0,
+          "p95": 18164.75,
+          "p99": 19996.55,
+          "min": 49.0,
+          "max": 20178.0,
+          "mean": 7607.91
+        },
+        "inference": {
+          "count": 96,
+          "p50": 1.89,
+          "p95": 6.99,
+          "p99": 12.3,
+          "min": 1.45,
+          "max": 13.49,
+          "mean": 2.98
+        },
+        "cellTotal": {
+          "count": 96,
+          "p50": 6346.89,
+          "p95": 18168.97,
+          "p99": 20000.74,
+          "min": 53.29,
+          "max": 20182.56,
+          "mean": 7614.81
+        },
+        "endToEnd": {
+          "count": 96,
+          "p50": 6819.57,
+          "p95": 18808.6,
+          "p99": 20523.43,
+          "min": 444.56,
+          "max": 20645.63,
+          "mean": 8193.81
+        }
+      },
+      "loads": {
+        "cold": 0,
+        "coldMs": {
+          "count": 0
+        },
+        "coldDeviceMiB": {
+          "count": 0
+        },
+        "reload": 21,
+        "reloadMs": {
+          "count": 21,
+          "p50": 405.78,
+          "p95": 2555.49,
+          "p99": 2798.47,
+          "min": 116.88,
+          "max": 2859.21,
+          "mean": 1068.42
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 3,
+        "unloadMs": {
+          "count": 3,
+          "p50": 20.85,
+          "p95": 426.26,
+          "p99": 462.3,
+          "min": 16.31,
+          "max": 471.31,
+          "mean": 169.49
+        },
+        "freedMiB": {
+          "count": 3,
+          "p50": 271.0,
+          "p95": 271.9,
+          "p99": 271.98,
+          "min": 208.0,
+          "max": 272.0,
+          "mean": 250.33
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 0,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 0
+        }
+      },
+      "device": {
+        "peakResidentMiB": 12173,
+        "minFreeMiB": 2954,
+        "budgetMiB": 13042,
+        "reserveMiB": 2048
+      },
+      "recycles": 1,
+      "schedulerCounters": {
+        "dispatched": 96,
+        "succeeded": 96,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 21,
+        "evictions": 3,
+        "deferred": 0,
+        "recycles": 1,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 2,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:155e1d5947d3120234a7a168b0448dfe2d09929969d1fa05f737977549b3872c",
+              "sha256:30e366c7940a28f582607f29f85835273aa3a0e599b2563d8a7e737a2f5e3e91",
+              "sha256:47926ae89d43b707bbeb889f2aaf695e16bb991930f95ed3705353ef8ebee5fc",
+              "sha256:4ad4c1927f7fdd63f64b17ab7d97fa3c72573c6922500925ad4eb8374efbb847",
+              "sha256:54faa92adf63905ea09799518edd6ffd6d1a807e9fb755d05f5033c68c9a7e3f",
+              "sha256:9e5464100f5e8865be21ba1ca47a829d3cc5381e8312b1e97711bb58c4624abc",
+              "sha256:a99196141124a97456c398e2fe77a24adc133429f906ceb2029cedf5058012ba",
+              "sha256:ad7beea90239852f40bf0721ee2b390543939dc5e85f56ad27be85676a779099",
+              "sha256:c3d0e3b4bd4548bb5064193de24ad3bbecd83e15d5b4532a9e1891ea36d00846",
+              "sha256:d99ea4e44966f8687809c1761dff7f8c7d9eaf2e2af42a3aa3892f0c35c6d262",
+              "sha256:dd9b51b6b0b0d723fe0e1d9ae71d2d62ba65319c6b8608a5e290bb0bb7fe937f",
+              "sha256:e64989b72bda6a49d419313de343abb2fa17a78e24da805d8ab8e94dddfc9fce",
+              "sha256:f06cd173e2e799d8577d991759271f3bcb23ed38616d27d7f73046a5a2c2345a",
+              "sha256:f276074a3cc4091f2207ce47b298744b033a21c428306768c46243e587bfe365"
+            ],
+            "residentMib": {
+              "sha256:30e366c7940a28f582607f29f85835273aa3a0e599b2563d8a7e737a2f5e3e91": 1901,
+              "sha256:d99ea4e44966f8687809c1761dff7f8c7d9eaf2e2af42a3aa3892f0c35c6d262": 712,
+              "sha256:54faa92adf63905ea09799518edd6ffd6d1a807e9fb755d05f5033c68c9a7e3f": 456,
+              "sha256:dd9b51b6b0b0d723fe0e1d9ae71d2d62ba65319c6b8608a5e290bb0bb7fe937f": 456,
+              "sha256:4ad4c1927f7fdd63f64b17ab7d97fa3c72573c6922500925ad4eb8374efbb847": 856,
+              "sha256:47926ae89d43b707bbeb889f2aaf695e16bb991930f95ed3705353ef8ebee5fc": 456,
+              "sha256:c3d0e3b4bd4548bb5064193de24ad3bbecd83e15d5b4532a9e1891ea36d00846": 712,
+              "sha256:e64989b72bda6a49d419313de343abb2fa17a78e24da805d8ab8e94dddfc9fce": 456,
+              "sha256:9e5464100f5e8865be21ba1ca47a829d3cc5381e8312b1e97711bb58c4624abc": 2012,
+              "sha256:a99196141124a97456c398e2fe77a24adc133429f906ceb2029cedf5058012ba": 1112,
+              "sha256:155e1d5947d3120234a7a168b0448dfe2d09929969d1fa05f737977549b3872c": 1112,
+              "sha256:f276074a3cc4091f2207ce47b298744b033a21c428306768c46243e587bfe365": 306,
+              "sha256:f06cd173e2e799d8577d991759271f3bcb23ed38616d27d7f73046a5a2c2345a": 562,
+              "sha256:ad7beea90239852f40bf0721ee2b390543939dc5e85f56ad27be85676a779099": 562
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 192,
+          "succeeded": 192,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 61,
+          "evictions": 19,
+          "deferred": 0,
+          "recycles": 2,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 192
+      }
+    },
+    {
+      "pattern": "burst",
+      "arrivals": 80,
+      "arrivalSecs": 20.9,
+      "wallSecs": 61.2,
+      "drained": true,
+      "jobs": {
+        "results": 80,
+        "succeeded": 80,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 80,
+          "p50": 16542.0,
+          "p95": 36916.2,
+          "p99": 37795.14,
+          "min": 2.0,
+          "max": 37980.0,
+          "mean": 16639.55
+        },
+        "inference": {
+          "count": 80,
+          "p50": 4.79,
+          "p95": 14.48,
+          "p99": 19.8,
+          "min": 1.72,
+          "max": 21.9,
+          "mean": 5.83
+        },
+        "cellTotal": {
+          "count": 80,
+          "p50": 16551.41,
+          "p95": 36930.37,
+          "p99": 37801.85,
+          "min": 6.96,
+          "max": 37995.82,
+          "mean": 16650.8
+        },
+        "endToEnd": {
+          "count": 80,
+          "p50": 17086.4,
+          "p95": 37705.43,
+          "p99": 38828.23,
+          "min": 275.31,
+          "max": 39831.25,
+          "mean": 17720.38
+        }
+      },
+      "loads": {
+        "cold": 0,
+        "coldMs": {
+          "count": 0
+        },
+        "coldDeviceMiB": {
+          "count": 0
+        },
+        "reload": 43,
+        "reloadMs": {
+          "count": 43,
+          "p50": 994.42,
+          "p95": 2749.34,
+          "p99": 2922.85,
+          "min": 101.67,
+          "max": 2993.17,
+          "mean": 1142.5
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 44,
+        "unloadMs": {
+          "count": 44,
+          "p50": 24.84,
+          "p95": 40.04,
+          "p99": 43.76,
+          "min": 13.59,
+          "max": 45.68,
+          "mean": 25.78
+        },
+        "freedMiB": {
+          "count": 44,
+          "p50": 743.0,
+          "p95": 1710.0,
+          "p99": 1722.28,
+          "min": 200.0,
+          "max": 1724.0,
+          "mean": 765.34
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 0,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 0
+        }
+      },
+      "device": {
+        "peakResidentMiB": 12932,
+        "minFreeMiB": 2460,
+        "budgetMiB": 13042,
+        "reserveMiB": 2048
+      },
+      "recycles": 0,
+      "schedulerCounters": {
+        "dispatched": 80,
+        "succeeded": 80,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 43,
+        "evictions": 44,
+        "deferred": 102,
+        "recycles": 0,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 2,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:30e366c7940a28f582607f29f85835273aa3a0e599b2563d8a7e737a2f5e3e91",
+              "sha256:47926ae89d43b707bbeb889f2aaf695e16bb991930f95ed3705353ef8ebee5fc",
+              "sha256:54faa92adf63905ea09799518edd6ffd6d1a807e9fb755d05f5033c68c9a7e3f",
+              "sha256:9e5464100f5e8865be21ba1ca47a829d3cc5381e8312b1e97711bb58c4624abc",
+              "sha256:a99196141124a97456c398e2fe77a24adc133429f906ceb2029cedf5058012ba",
+              "sha256:ad7beea90239852f40bf0721ee2b390543939dc5e85f56ad27be85676a779099",
+              "sha256:c3d0e3b4bd4548bb5064193de24ad3bbecd83e15d5b4532a9e1891ea36d00846",
+              "sha256:d60bd4f49d901d1c9d0bf494b53c423e974b8325f8a5879c1e5cd89dbb7940c0",
+              "sha256:dd9b51b6b0b0d723fe0e1d9ae71d2d62ba65319c6b8608a5e290bb0bb7fe937f",
+              "sha256:dda1937221b98ba40b53b0f8651f8a631e4560bdddef828b49a4639f44776697",
+              "sha256:e64989b72bda6a49d419313de343abb2fa17a78e24da805d8ab8e94dddfc9fce",
+              "sha256:f06cd173e2e799d8577d991759271f3bcb23ed38616d27d7f73046a5a2c2345a",
+              "sha256:f276074a3cc4091f2207ce47b298744b033a21c428306768c46243e587bfe365"
+            ],
+            "residentMib": {
+              "sha256:dd9b51b6b0b0d723fe0e1d9ae71d2d62ba65319c6b8608a5e290bb0bb7fe937f": 456,
+              "sha256:f276074a3cc4091f2207ce47b298744b033a21c428306768c46243e587bfe365": 306,
+              "sha256:a99196141124a97456c398e2fe77a24adc133429f906ceb2029cedf5058012ba": 1112,
+              "sha256:e64989b72bda6a49d419313de343abb2fa17a78e24da805d8ab8e94dddfc9fce": 456,
+              "sha256:c3d0e3b4bd4548bb5064193de24ad3bbecd83e15d5b4532a9e1891ea36d00846": 712,
+              "sha256:47926ae89d43b707bbeb889f2aaf695e16bb991930f95ed3705353ef8ebee5fc": 456,
+              "sha256:d60bd4f49d901d1c9d0bf494b53c423e974b8325f8a5879c1e5cd89dbb7940c0": 856,
+              "sha256:dda1937221b98ba40b53b0f8651f8a631e4560bdddef828b49a4639f44776697": 1756,
+              "sha256:30e366c7940a28f582607f29f85835273aa3a0e599b2563d8a7e737a2f5e3e91": 1756,
+              "sha256:54faa92adf63905ea09799518edd6ffd6d1a807e9fb755d05f5033c68c9a7e3f": 456,
+              "sha256:f06cd173e2e799d8577d991759271f3bcb23ed38616d27d7f73046a5a2c2345a": 562,
+              "sha256:ad7beea90239852f40bf0721ee2b390543939dc5e85f56ad27be85676a779099": 562,
+              "sha256:9e5464100f5e8865be21ba1ca47a829d3cc5381e8312b1e97711bb58c4624abc": 2012
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 272,
+          "succeeded": 272,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 104,
+          "evictions": 63,
+          "deferred": 102,
+          "recycles": 2,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 272
+      }
+    },
+    {
+      "pattern": "prefetch",
+      "arrivals": 96,
+      "arrivalSecs": 68.4,
+      "wallSecs": 78.9,
+      "drained": true,
+      "jobs": {
+        "results": 96,
+        "succeeded": 96,
+        "failed": 0,
+        "invalidInputs": 0,
+        "admissionFailures": [],
+        "completionFailures": []
+      },
+      "latencyMs": {
+        "queue": {
+          "count": 96,
+          "p50": 3976.0,
+          "p95": 10256.25,
+          "p99": 11196.75,
+          "min": 2.0,
+          "max": 11629.0,
+          "mean": 4586.25
+        },
+        "inference": {
+          "count": 96,
+          "p50": 4.42,
+          "p95": 6.93,
+          "p99": 13.49,
+          "min": 1.72,
+          "max": 21.08,
+          "mean": 4.24
+        },
+        "cellTotal": {
+          "count": 96,
+          "p50": 3981.75,
+          "p95": 10271.11,
+          "p99": 11212.84,
+          "min": 7.67,
+          "max": 11686.39,
+          "mean": 4597.43
+        },
+        "endToEnd": {
+          "count": 96,
+          "p50": 5042.58,
+          "p95": 10777.43,
+          "p99": 11722.7,
+          "min": 394.67,
+          "max": 12461.84,
+          "mean": 5310.67
+        }
+      },
+      "loads": {
+        "cold": 0,
+        "coldMs": {
+          "count": 0
+        },
+        "coldDeviceMiB": {
+          "count": 0
+        },
+        "reload": 32,
+        "reloadMs": {
+          "count": 32,
+          "p50": 767.51,
+          "p95": 2700.7,
+          "p99": 2884.75,
+          "min": 100.61,
+          "max": 2940.03,
+          "mean": 1085.6
+        },
+        "failed": 0,
+        "failureCodes": []
+      },
+      "evictions": {
+        "unloads": 20,
+        "unloadMs": {
+          "count": 20,
+          "p50": 148.85,
+          "p95": 510.73,
+          "p99": 691.33,
+          "min": 26.3,
+          "max": 736.48,
+          "mean": 193.9
+        },
+        "freedMiB": {
+          "count": 20,
+          "p50": 810.0,
+          "p95": 1712.05,
+          "p99": 1712.81,
+          "min": 339.0,
+          "max": 1713.0,
+          "mean": 1060.85
+        }
+      },
+      "oom": {
+        "loadPressure": 0,
+        "jobErrors": []
+      },
+      "providers": [
+        "CUDAExecutionProvider,CPUExecutionProvider"
+      ],
+      "gpuDevices": [
+        "0"
+      ],
+      "prefetch": {
+        "warmed": 32,
+        "refusedByBusyCell": 0,
+        "warmMs": {
+          "count": 32,
+          "p50": 467.24,
+          "p95": 2809.45,
+          "p99": 3082.39,
+          "min": 0.25,
+          "max": 3161.8,
+          "mean": 955.81
+        }
+      },
+      "device": {
+        "peakResidentMiB": 12750,
+        "minFreeMiB": 2827,
+        "budgetMiB": 13042,
+        "reserveMiB": 2048
+      },
+      "recycles": 0,
+      "schedulerCounters": {
+        "dispatched": 96,
+        "succeeded": 96,
+        "retried": 0,
+        "exhausted": 0,
+        "blocked": 0,
+        "loads": 32,
+        "evictions": 20,
+        "deferred": 0,
+        "recycles": 0,
+        "callbackFailures": 0
+      },
+      "schedulerStatus": {
+        "paused": false,
+        "queued": 0,
+        "retryWaiting": 0,
+        "recycleCount": 2,
+        "lanes": 40,
+        "lanesWithWorkOrBlocked": [],
+        "cells": [
+          {
+            "cellId": "gpu0-0",
+            "device": "0",
+            "alive": true,
+            "resident": [
+              "sha256:47926ae89d43b707bbeb889f2aaf695e16bb991930f95ed3705353ef8ebee5fc",
+              "sha256:75e562b8e74aa64b5e0e97f78b53c4ad28e93a7aa1d07599c4cc2b84a98a26fd",
+              "sha256:7cec6ad744bbb85cb9e9af72445a2cf7ee3e6c10536c603a5cf409e020aae60f",
+              "sha256:7e0a03f3d03a7e73251235039ef6f7050326c4eed0d20cc7c2d9bf79226b0392",
+              "sha256:8896317acb62a14d689b3a11113e73a7839fccf6972d94f43b393a62b0871d21",
+              "sha256:899188de11bedb0e5fc514096d1c0719f858e8b6bf2064e505bd82055d65513e",
+              "sha256:93cfd6f4268e53ed2e05e55a419218ae6846a8c3651392fe35f26d3bbd0eceb5",
+              "sha256:966c8d94bcf4172b6e9521423e3722050b18f3019de909f01954e4aa69d44ee6",
+              "sha256:9e72fafc8d60978ddefdf4ca55a519e2e593ba477d0abc469eefb17b9b911e43",
+              "sha256:a1315e01125b0985e2df0ee70512f8d50b1ba5c5ae626b60c0a50f7b38899424",
+              "sha256:ad7beea90239852f40bf0721ee2b390543939dc5e85f56ad27be85676a779099",
+              "sha256:d31049ffa130f7cad9193a54afac311134fd3d833e86cb65176750fa3e335988",
+              "sha256:dcd35f7dfbec2f8968cef114aec7d00388e23190ad23f035c42263b3575b586c",
+              "sha256:dd9b51b6b0b0d723fe0e1d9ae71d2d62ba65319c6b8608a5e290bb0bb7fe937f",
+              "sha256:e64989b72bda6a49d419313de343abb2fa17a78e24da805d8ab8e94dddfc9fce",
+              "sha256:e8dd78794b0ec8ac176093f680bdfe2cc75cedadaf6d4e404529818b359d4e65",
+              "sha256:f06cd173e2e799d8577d991759271f3bcb23ed38616d27d7f73046a5a2c2345a",
+              "sha256:f276074a3cc4091f2207ce47b298744b033a21c428306768c46243e587bfe365"
+            ],
+            "residentMib": {
+              "sha256:899188de11bedb0e5fc514096d1c0719f858e8b6bf2064e505bd82055d65513e": 306,
+              "sha256:dd9b51b6b0b0d723fe0e1d9ae71d2d62ba65319c6b8608a5e290bb0bb7fe937f": 456,
+              "sha256:f06cd173e2e799d8577d991759271f3bcb23ed38616d27d7f73046a5a2c2345a": 562,
+              "sha256:f276074a3cc4091f2207ce47b298744b033a21c428306768c46243e587bfe365": 306,
+              "sha256:e64989b72bda6a49d419313de343abb2fa17a78e24da805d8ab8e94dddfc9fce": 456,
+              "sha256:ad7beea90239852f40bf0721ee2b390543939dc5e85f56ad27be85676a779099": 562,
+              "sha256:e8dd78794b0ec8ac176093f680bdfe2cc75cedadaf6d4e404529818b359d4e65": 306,
+              "sha256:47926ae89d43b707bbeb889f2aaf695e16bb991930f95ed3705353ef8ebee5fc": 456,
+              "sha256:dcd35f7dfbec2f8968cef114aec7d00388e23190ad23f035c42263b3575b586c": 712,
+              "sha256:a1315e01125b0985e2df0ee70512f8d50b1ba5c5ae626b60c0a50f7b38899424": 562,
+              "sha256:8896317acb62a14d689b3a11113e73a7839fccf6972d94f43b393a62b0871d21": 306,
+              "sha256:7cec6ad744bbb85cb9e9af72445a2cf7ee3e6c10536c603a5cf409e020aae60f": 456,
+              "sha256:966c8d94bcf4172b6e9521423e3722050b18f3019de909f01954e4aa69d44ee6": 856,
+              "sha256:7e0a03f3d03a7e73251235039ef6f7050326c4eed0d20cc7c2d9bf79226b0392": 1756,
+              "sha256:9e72fafc8d60978ddefdf4ca55a519e2e593ba477d0abc469eefb17b9b911e43": 2012,
+              "sha256:75e562b8e74aa64b5e0e97f78b53c4ad28e93a7aa1d07599c4cc2b84a98a26fd": 1112,
+              "sha256:93cfd6f4268e53ed2e05e55a419218ae6846a8c3651392fe35f26d3bbd0eceb5": 712,
+              "sha256:d31049ffa130f7cad9193a54afac311134fd3d833e86cb65176750fa3e335988": 562
+            },
+            "leased": []
+          }
+        ],
+        "counters": {
+          "dispatched": 368,
+          "succeeded": 368,
+          "retried": 0,
+          "exhausted": 0,
+          "blocked": 0,
+          "loads": 136,
+          "evictions": 83,
+          "deferred": 102,
+          "recycles": 2,
+          "callbackFailures": 0
+        }
+      },
+      "ledgerStates": {
+        "COMPLETED": 368
+      }
+    }
+  ]
+}

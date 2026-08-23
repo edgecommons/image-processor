@@ -28,10 +28,13 @@ def run_corpus(staged: Callable, key: str, images: List[Path], name_of: Callable
     Returns:
         A ``(model, records)`` pair.
     """
-    model, bundle, session = staged(key)
+    model, bundle, session, record_ms = staged(key)
     records = []
     for image in images:
-        normalized, decision = runner.infer(session, bundle.manifest, runner.read_image(image))
+        normalized, decision, session_ms = runner.infer(
+            session, bundle.manifest, runner.read_image(image)
+        )
+        record_ms(session_ms)
         records.append(runner.record(name_of(image), normalized, decision))
     return model, records
 
