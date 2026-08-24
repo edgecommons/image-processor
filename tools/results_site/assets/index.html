@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inference results explorer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230969da'/%3E%3Crect x='3' y='4' width='10' height='8' rx='1' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="identity">
+    <span class="mark" aria-hidden="true">IP</span>
+    <div>
+      <h1>Inference results explorer</h1>
+      <p class="sub" id="build-stamp"><!--GENERATED--></p>
+    </div>
+  </div>
+  <div class="topbar-controls">
+    <label class="picker" id="run-picker" hidden>
+      <span>Run</span>
+      <select id="run-select"></select>
+    </label>
+    <span class="count" id="entry-count"></span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button type="button" data-view="summary" class="tab">Summary</button>
+  <button type="button" data-view="gallery" class="tab">Gallery</button>
+</nav>
+
+<main>
+  <section class="view" id="view-summary" aria-label="Summary">
+    <div class="cards" id="model-cards"></div>
+    <section class="panel" id="runs-strip" hidden>
+      <h2>Graph time across runs</h2>
+      <p class="note">Median session milliseconds per model, per run. The session time covers the
+        graph alone, so a CPU reading and a CUDA reading compare like for like.</p>
+      <div class="scroller"><table class="grid-table" id="runs-table"></table></div>
+    </section>
+    <section class="panel" id="refusals-panel" hidden>
+      <h2>Refusals</h2>
+      <p class="note">The tier-1 bad-input set through the component decoder. Each fixture names
+        the decode code it has to raise; a fixture that is supposed to decode names none.</p>
+      <div class="scroller"><table class="grid-table" id="refusals-table"></table></div>
+    </section>
+  </section>
+
+  <section class="view" id="view-gallery" aria-label="Gallery" hidden>
+    <div class="filters" id="filters">
+      <label class="picker"><span>Family</span><select id="filter-family"></select></label>
+      <label class="picker"><span>Model</span><select id="filter-model"></select></label>
+      <label class="picker"><span>Suite</span><select id="filter-suite"></select></label>
+      <label class="picker"><span>Outcome</span><select id="filter-outcome"></select></label>
+      <label class="picker"><span>Run</span><select id="filter-run"></select></label>
+      <label class="picker grow"><span>Image name</span>
+        <input type="search" id="filter-q" placeholder="substring of the image name" autocomplete="off">
+      </label>
+      <button type="button" class="ghost" id="filter-clear">Clear</button>
+    </div>
+    <p class="matches" id="match-count"></p>
+    <div class="thumbs" id="thumb-grid"></div>
+  </section>
+
+  <section class="view" id="view-detail" aria-label="Result" hidden>
+    <div class="detail-bar">
+      <button type="button" class="ghost" id="detail-back">&larr; Gallery</button>
+      <span class="position" id="detail-position"></span>
+      <span class="spacer"></span>
+      <button type="button" class="ghost" id="detail-prev">&larr; Prev</button>
+      <button type="button" class="ghost" id="detail-next">Next &rarr;</button>
+    </div>
+    <h2 id="detail-title"></h2>
+    <p class="sub" id="detail-subtitle"></p>
+    <div class="pair" id="detail-pair"></div>
+    <div class="blocks">
+      <section class="panel" id="detail-model"></section>
+      <section class="panel" id="detail-decision"></section>
+      <section class="panel" id="detail-timings"></section>
+    </div>
+    <details class="panel json-panel" id="detail-json-panel">
+      <summary>Full inference result</summary>
+      <div class="json-bar">
+        <span class="note" id="detail-json-note"></span>
+        <button type="button" class="ghost" id="copy-json">Copy JSON</button>
+      </div>
+      <pre class="json" id="detail-json"></pre>
+    </details>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>EdgeCommons ImageProcessor &mdash; every result on this page is the body of the
+    <code>app/inference/result</code> message the component publishes for that image.</p>
+</footer>
+
+<noscript>
+  <section class="panel">
+    <h2>Entry index</h2>
+    <p class="note">The explorer needs scripting. Every entry it holds is listed below.</p>
+    <div class="scroller"><table class="grid-table">
+      <thead><tr><th>Model</th><th>Run</th><th>Image</th><th>Outcome</th><th>Session</th><th>Files</th></tr></thead>
+      <tbody>
+<!--ENTRY-INDEX-->
+      </tbody>
+    </table></div>
+  </section>
+</noscript>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

@@ -800,6 +800,7 @@ has to be able to fail it; and the artifact manager is its own module rather tha
 | WP6 wiring | `feat/wp6-wiring` | `ImageProcessor.py`, `outputs/`, `commands.py`, `metrics.py`, `health.py`, `connectivity.py`, docs | all above merged |
 | WP8 camera playlist | camera-adapter `feat/sim-playlist` | `src/backend/sim.rs`, config, docs | — |
 | WP9 replicator cleanup | file-replicator `fix/cleanup-failure-not-success` | `src/instance/worker.rs`, state, docs | — |
+| WP11 results site | `feat/wp11-results-site` | `tools/results_site/`, `tools/build_results_site.py`, `tests/tools/test_results_site.py` | WP4a fixtures, WP6 `outputs/result.py`, WP7 `tests/live_models/` |
 
 Every WP ships its own tests at ≥ 90% for the files it owns, updates this LLD if an interface
 must change (and says so in the PR), and never edits files owned by another WP. Shared files
