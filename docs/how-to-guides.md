@@ -459,3 +459,74 @@ nothing is ever evicted and the measurement means nothing. On an 8 GB card the d
 already several times the budget; to shorten a run instead, lower `EC_NVIDIA_ROUTES` and
 `EC_NVIDIA_ARRIVALS` together, and keep enough of the 1.5 GB tier in the routed set to stay over
 the budget.
+
+## Browse the inference results
+
+The test suites report pass or fail. The results explorer reports what the models actually did:
+every image of both corpora, the whole `app/inference/result` body the component publishes for it,
+and the detections, segments, or anomaly regions drawn on a copy of the picture.
+
+`tools/build_results_site.py` builds a static site into `tests/.site/`, which is gitignored. The
+site is four files plus the pictures, it fetches nothing, and it opens from disk.
+
+### Build the site
+
+1. Build both suites on CPU:
+
+   ```bash
+   python tools/build_results_site.py --out tests/.site --suites synthetic,live
+   ```
+
+   The `synthetic` suite generates the tier-1 corpus into a temporary directory first, so it needs
+   no network. The `live` suite reads `tests/.cache`, so fetch the corpus first with
+   `python tools/fetch_test_assets.py`; see [Run the real-model suite](#run-the-real-model-suite).
+
+1. Build only what you want to look at:
+
+   ```bash
+   python tools/build_results_site.py --out tests/.site --suites synthetic
+   python tools/build_results_site.py --out tests/.site --models yolox-s,fcn-resnet50-12 --limit 5
+   ```
+
+1. Open `tests/.site/index.html`. The command prints the `file://` URL when it finishes.
+
+### Add a CUDA run beside the CPU one
+
+A run is one execution provider on one device. `--merge` folds a new run into the site already in
+`--out` instead of replacing it, so a CPU build and a CUDA build sit side by side and the summary
+view gains a strip comparing median graph time per model.
+
+Run the CUDA leg where the CUDA provider is installed. On this workstation that is WSL, with the
+`gpu` and `nvml` extras:
+
+```bash
+cd /mnt/c/Users/you/source/edgecommons/image-processor
+PYTHONPATH=$PWD ~/ip-gpu-venv/bin/python tools/build_results_site.py \
+    --out tests/.site --suites live --provider CUDAExecutionProvider --merge
+```
+
+The session is refused unless ONNX Runtime actually assigns `CUDAExecutionProvider`, so a leg that
+silently fell back to CPU fails the build rather than mislabelling its numbers. Rebuilding a run
+replaces that run and leaves the other one alone.
+
+### Serve it
+
+The site works from `file://`. Serve it when you want to look at a build from another machine, or
+when a browser is configured to treat local files strictly:
+
+```bash
+python tools/build_results_site.py --out tests/.site --suites synthetic --serve 8000
+```
+
+### What the views hold
+
+| View | Holds |
+|---|---|
+| Summary | One card per model: task family, corpus, image count, decision outcome counts, and the minimum, median, 95th percentile, and maximum graph time. Clicking a card opens the gallery filtered to that model. Below the cards, the tier-1 bad-input set with the decode code each fixture raised. |
+| Gallery | Every entry as a thumbnail, with facets for family, model, suite, outcome, and run, and a substring filter on the image name. The filters are in the URL fragment, so a filtered view is a link. |
+| Detail | The input and the overlay side by side, each opening full size in a new tab; a classification shows its top-k table where the overlay would be. Below them the model card, the decision, the timings, and the full result body as collapsible JSON with a copy button. `ArrowLeft` and `ArrowRight` move within the current filter, and `Escape` returns to the gallery. |
+
+The timings are the two the builder measures: `session` is the graph alone, and `wall total` covers
+reading the file, decoding, preprocessing, the graph, postprocessing, and the decision rules. The
+per-stage fields of the result body read zero, because the builder does not time those stages
+separately.
