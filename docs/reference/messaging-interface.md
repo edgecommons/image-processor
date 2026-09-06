@@ -1,7 +1,7 @@
 # Reference — Messaging interface and CLI
 
 Every topic and message this component publishes or accepts, and the CLI flags it runs under.
-Addressing follows the Unified Namespace: `ecv1/{device}/{component}/{instance}/{class}[/channel]`.
+Addressing follows the Unified Namespace: `ecv1/{device}/{component}[/{instance}]/{class}[/channel]`.
 
 - `{device}` — the resolved Thing name (the last `hierarchy` level, or `-t` directly).
 - `{component}` — `image-processor`, set by `component.token`. It is a separate identifier from the
