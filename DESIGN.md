@@ -4,7 +4,9 @@
 > update the relevant section here in the same change. A build that compiles but drifts from what
 > this document says is not done.
 
-**Status:** accepted design, implementation starting 2026-08-22.
+**Status:** accepted design with an implementation on main. The original phase plan below remains
+the scope contract; the [README](README.md#current-status) distinguishes implemented capabilities
+from dated GPU evidence and remaining integration work (reviewed 2026-09-06).
 **Lineage:** `roadmap/image-inference-processor-hld.md` (initial HLD, 2026-07-27), adversarially
 reviewed against the code on `main` of every sibling repo on 2026-08-22; the 16 decisions in §2
 supersede the HLD's §21 open questions. Roadmap lineage: Phase D "CVML edge vertical" in

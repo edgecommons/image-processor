@@ -18,6 +18,16 @@ One process hosts many routes. A route binds one input source to one immutable m
 set of outputs, and one completion policy, and routes are independent: a backlog on one never
 stalls another.
 
+## Current status
+
+The implementation on main includes spool and subscription inputs, durable job/result recovery,
+confirmed result publication, ONNX executor cells, verified model bundles and stage/warm/activate
+control. Registry maturity is **experimental**. The dated phase-0 GPU evidence in
+[DESIGN.md](DESIGN.md) records runs on two NVIDIA GPUs; it does not establish every later deployment
+or integration gate. Greengrass/Kubernetes and Dallas acceptance evidence, and the evidence-first
+FileReplicator receipt/manifest workflow, remain separate work to complete. This documentation
+review on 2026-09-06 did not rerun GPU, deployment or integration tests.
+
 ## Quick start
 
 You need a local MQTT broker (`docker run -d -p 1883:1883 --name emqx emqx/emqx:latest`), or run
